@@ -3,6 +3,11 @@
    ============================================================ */
 import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js";
 import { t, getLang, setLang } from "./i18n.js";
+import { moduleRoutes } from "./registry.js";
+/* Feature modules (self-register via registry). Order = nav order. */
+import "./modules/analytics.js";
+import "./modules/integrations.js";
+import "./modules/account.js";
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -508,27 +513,44 @@ function viewStrategy() {
 /* ============================================================
    Router + render
    ============================================================ */
-const ROUTES = {
-  dashboard: { view: viewDashboard, title: "page.dashboard", sub: "page.dashboard.sub" },
-  tasks: { view: viewTasks, title: "page.tasks", sub: "page.tasks.sub" },
-  content: { view: viewContent, title: "page.content", sub: "page.content.sub" },
-  owners: { view: viewOwners, title: "page.owners", sub: "page.owners.sub" },
-  strategy: { view: viewStrategy, title: "page.strategy", sub: "page.strategy.sub" },
+const coreRoutes = {
+  dashboard: { view: viewDashboard, title: "page.dashboard", sub: "page.dashboard.sub", icon: "📊", labelKey: "nav.dashboard", order: 10 },
+  tasks: { view: viewTasks, title: "page.tasks", sub: "page.tasks.sub", icon: "✅", labelKey: "nav.tasks", order: 20 },
+  content: { view: viewContent, title: "page.content", sub: "page.content.sub", icon: "📅", labelKey: "nav.content", order: 30 },
+  owners: { view: viewOwners, title: "page.owners", sub: "page.owners.sub", icon: "🏠", labelKey: "nav.owners", order: 40 },
+  strategy: { view: viewStrategy, title: "page.strategy", sub: "page.strategy.sub", icon: "🎯", labelKey: "nav.strategy", order: 90 },
 };
+
+function allRoutes() {
+  const r = { ...coreRoutes };
+  for (const m of moduleRoutes) {
+    r[m.id] = { view: m.view, title: m.titleKey, sub: m.subKey, icon: m.icon, labelKey: m.labelKey, mount: m.mount, order: m.order ?? 100 };
+  }
+  return r;
+}
 
 function currentRoute() {
   const r = location.hash.replace("#/", "") || "dashboard";
-  return ROUTES[r] ? r : "dashboard";
+  return allRoutes()[r] ? r : "dashboard";
+}
+
+function buildNav() {
+  const routes = allRoutes();
+  const items = Object.entries(routes).sort((a, b) => a[1].order - b[1].order);
+  $("#nav").innerHTML = items.map(([id, r]) =>
+    `<a class="nav__item" href="#/${id}" data-route="${id}"><span class="nav__icon">${r.icon || "•"}</span><span>${esc(t(r.labelKey || id))}</span></a>`
+  ).join("");
+  $$("#nav .nav__item").forEach(a => a.onclick = () => $("#sidebar").classList.remove("open"));
 }
 
 function render() {
   const r = currentRoute();
-  const route = ROUTES[r];
+  const route = allRoutes()[r];
   $("#pageTitle").textContent = t(route.title);
   $("#pageSubtitle").textContent = t(route.sub);
   $("#view").innerHTML = route.view();
   $$("#nav .nav__item").forEach(a => a.classList.toggle("active", a.dataset.route === r));
-  bindViewEvents(r);
+  if (route.mount) route.mount({ render, toast, t, db }); else bindViewEvents(r);
 }
 
 function bindViewEvents(r) {
@@ -584,6 +606,7 @@ function applyLang() {
   document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
   $$("[data-i18n]").forEach(el => el.textContent = t(el.dataset.i18n));
   $$("[data-i18n-ph]").forEach(el => el.placeholder = t(el.dataset.i18nPh));
+  buildNav();
 }
 
 function initChrome() {
@@ -604,11 +627,14 @@ function initChrome() {
   // sidebar mobile
   const sb = $("#sidebar");
   $("#menuToggle").onclick = () => sb.classList.toggle("open");
-  $$("#nav .nav__item").forEach(a => a.onclick = () => sb.classList.remove("open"));
 }
 
 /* Boot */
 window.addEventListener("hashchange", render);
 initChrome();
+buildNav();
 applyLang();
 render();
+
+/* Expose a tiny API for feature modules (charts, exports, etc.) */
+window.AjrlyOS = { db, t, getLang, render, toast, openModal, closeModal, esc, fmtDate, PILLARS, GOALS, TEAM, OWNER_STAGES };

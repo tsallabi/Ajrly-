@@ -191,3 +191,10 @@ let lang = localStorage.getItem("ajrly_lang") || "ar";
 export function getLang() { return lang; }
 export function setLang(l) { lang = l; localStorage.setItem("ajrly_lang", l); }
 export function t(key) { return (STR[lang] && STR[lang][key]) || (STR.en[key]) || key; }
+
+/* Modules register their own translations: registerStrings({ ar:{...}, en:{...} }) */
+export function registerStrings(dict) {
+  for (const l of Object.keys(dict)) {
+    STR[l] = Object.assign(STR[l] || {}, dict[l]);
+  }
+}
