@@ -7,3 +7,27 @@ compatibility_date = "2026-06-01"
 
 # Enable Node.js compatibility APIs for any Pages Functions in /functions.
 compatibility_flags = ["nodejs_compat"]
+
+# ============================================================
+# Cloud backend bindings — UNCOMMENT and fill ids AFTER provisioning.
+# (See docs/CLOUD-ARCHITECTURE.md → Provisioning.) Until then the app
+# runs in local mode and these stay commented so deploys never break.
+# ============================================================
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "ajrly"
+# database_id = "REPLACE_WITH_D1_ID"
+#
+# [[kv_namespaces]]
+# binding = "KV"
+# id = "REPLACE_WITH_KV_ID"
+#
+# [[durable_objects.bindings]]
+# name = "PRESENCE"
+# class_name = "PresenceRoom"
+# script_name = "ajrly"
+#
+# [[migrations]]
+# tag = "v1"
+# new_classes = ["PresenceRoom"]
+
