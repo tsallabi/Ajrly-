@@ -12,7 +12,9 @@ import "./modules/account.js";
 import "./modules/team.js";
 import "./modules/support.js";
 import "./modules/performance.js";
-import "./presence.js"; // exposes window.AjrlyPresence (no-op until cloud is live)
+import cloud from "./cloud.js";
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js";
+import AjrlyPresence from "./presence.js"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -62,11 +64,22 @@ registerStrings({
   },
 });
 
-/* dynamic team list (registered active users; falls back to seed names) */
-function team() { const list = teamNames(); return list.length ? list : TEAM; }
-const W = () => can("write");   // may create/edit
-const D = () => can("del");     // may delete
-const A = () => can("assign");  // may assign/delegate
+/* ---- cloud state (set during boot; falls back to local auth when off) ---- */
+let cloudReady = false;
+let cloudUser = null;
+let cloudTeam = [];           // names from /api/sync users (cloud mode)
+/** The signed-in user, from cloud when available, else local auth. */
+function activeUser() { return cloudReady ? cloudUser : currentUser(); }
+
+/* dynamic team list (registered users; cloud users in cloud mode, else local) */
+function team() {
+  if (cloudReady && cloudTeam.length) return cloudTeam;
+  const list = teamNames();
+  return list.length ? list : TEAM;
+}
+const W = () => can("write", activeUser());   // may create/edit
+const D = () => can("del", activeUser());     // may delete
+const A = () => can("assign", activeUser());  // may assign/delegate
 
 /* ---------------- Toast ---------------- */
 function toast(msg) {
@@ -580,7 +593,7 @@ function buildNav() {
 
 function render() {
   // Auth gate — must be signed in to use the app
-  if (!currentUser()) { renderAuthScreen(); return; }
+  if (!activeUser()) { renderAuthScreen(); return; }
   document.body.classList.remove("authing");
   renderUserChip();
   try {
@@ -632,15 +645,30 @@ function renderAuthScreen() {
   $("#a_toggle").onclick = () => { authMode = reg ? "login" : "register"; renderAuthScreen(); };
   const submit = async () => {
     const err = $("#a_err");
+    const btn = $("#a_submit");
     const email = $("#a_email").value, pw = $("#a_pw").value;
-    let res;
-    if (reg) res = await register({ name: $("#a_name").value, email, password: pw });
-    else res = await login(email, pw);
-    if (res.error) { err.textContent = t("auth.err." + res.error) || res.error; return; }
-    authMode = null;
-    toast(t("auth.signedIn"));
-    location.hash = "#/dashboard";
-    render();
+    const name = $("#a_name") ? $("#a_name").value : "";
+    btn.disabled = true;
+    try {
+      if (cloudReady) {
+        // Cloud auth: server creates the session cookie; sync data after.
+        cloudUser = reg ? await cloud.register(name, email, pw) : await cloud.login(email, pw);
+        try { const data = await hydrateFromCloud(db); if (data && data.users) cloudTeam = data.users.map(u => u.name); } catch (_) {}
+        wireWriteThrough(db, (e) => console.warn("cloud write failed", e));
+        try { AjrlyPresence.start(); } catch (_) {}
+      } else {
+        const res = reg ? await register({ name, email, password: pw }) : await login(email, pw);
+        if (res.error) { err.textContent = t("auth.err." + res.error) || res.error; btn.disabled = false; return; }
+      }
+      authMode = null;
+      toast(t("auth.signedIn"));
+      location.hash = "#/dashboard";
+      render();
+    } catch (e) {
+      const code = (e && e.code) || "invalid";
+      err.textContent = t("auth.err." + code) !== ("auth.err." + code) ? t("auth.err." + code) : t("auth.err.invalid");
+      btn.disabled = false;
+    }
   };
   $("#a_submit").onclick = submit;
   ["a_email", "a_pw", "a_name"].forEach(id => { const el = $("#" + id); if (el) el.onkeydown = (e) => { if (e.key === "Enter") submit(); }; });
@@ -648,7 +676,7 @@ function renderAuthScreen() {
 
 /* ---------------- Sidebar user chip ---------------- */
 function renderUserChip() {
-  const u = currentUser();
+  const u = activeUser();
   const foot = $(".sidebar__footer");
   if (!u || !foot) return;
   const initials = String(u.name || "?").trim().slice(0, 2).toUpperCase();
@@ -662,7 +690,12 @@ function renderUserChip() {
       </div>
     </a>
     <button class="btn btn--sm" id="logoutBtn" style="width:100%;margin-top:8px">⎋ ${esc(t("auth.logout"))}</button>`;
-  $("#logoutBtn").onclick = () => { logout(); authMode = null; render(); };
+  $("#logoutBtn").onclick = async () => {
+    try { AjrlyPresence.stop && AjrlyPresence.stop(); } catch (_) {}
+    if (cloudReady) { try { await cloud.logout(); } catch (_) {} cloudUser = null; }
+    else { logout(); }
+    authMode = null; render();
+  };
 }
 
 function bindViewEvents(r) {
@@ -742,16 +775,44 @@ function initChrome() {
 }
 
 /* Expose a tiny API for feature modules (charts, exports, etc.).
-   Must be set BEFORE the first render so module views can read it. */
-window.AjrlyOS = { db, t, getLang, render, toast, openModal, closeModal, esc, fmtDate, PILLARS, GOALS, TEAM, OWNER_STAGES, can, currentUser, team };
+   Must be set BEFORE the first render so module views can read it.
+   `can`/`currentUser` resolve against the active (cloud or local) user. */
+window.AjrlyOS = {
+  db, t, getLang, render, toast, openModal, closeModal, esc, fmtDate,
+  PILLARS, GOALS, TEAM, OWNER_STAGES, team,
+  currentUser: () => activeUser(),
+  can: (action, u) => can(action, u || activeUser()),
+  isCloud: () => cloudReady,
+  cloud,
+};
 
-/* Boot — wrapped so a failure shows an error instead of a black screen */
+/* Boot — wrapped so a failure shows an error instead of a black screen.
+   Detect the cloud backend first; if live, restore the session and hydrate
+   shared data, then render. Always falls back to local mode on any failure. */
 window.addEventListener("hashchange", render);
-try {
+async function boot() {
   initChrome();
   buildNav();
   applyLang();
+  render(); // instant first paint (local); re-rendered after cloud detection
+  try {
+    cloudReady = await cloud.detect();
+    if (cloudReady) {
+      try {
+        cloudUser = await cloud.me();          // restore session if cookie valid
+        if (cloudUser) {
+          const data = await hydrateFromCloud(db);
+          if (data && data.users) cloudTeam = data.users.map(u => u.name);
+          wireWriteThrough(db, (e) => console.warn("cloud write failed", e));
+          try { AjrlyPresence.start(); } catch (_) {}
+        }
+      } catch (_) { cloudUser = null; }
+    }
+  } catch (_) { cloudReady = false; }
   render();
+}
+try {
+  boot();
 } catch (err) {
   console.error("Boot failed:", err);
   const v = document.getElementById("view");
