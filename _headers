@@ -1,6 +1,12 @@
 # Cloudflare Pages headers — https://developers.cloudflare.com/pages/configuration/headers/
 # Applied edge-side. Order: most-specific paths can override broader ones.
 
+# HTML must never be cached, so new deploys are picked up immediately.
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
 # Assets are NOT content-hashed (fixed names like styles.css, app.js), so they
 # must revalidate — an immutable long cache would hide updates from returning
 # visitors. Cheap 304s keep it fast while always serving the latest after deploy.
