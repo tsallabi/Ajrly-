@@ -9,6 +9,10 @@ import { currentUser, hasUsers, login, register, logout, can, teamNames } from "
 import "./modules/analytics.js";
 import "./modules/integrations.js";
 import "./modules/account.js";
+import "./modules/team.js";
+import "./modules/support.js";
+import "./modules/performance.js";
+import "./presence.js"; // exposes window.AjrlyPresence (no-op until cloud is live)
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);

@@ -1,0 +1,108 @@
+/* ============================================================
+   Ajrly OS — Customer Service (CS Inbox) styles  [WS-C]
+   Theme-aware (CSS vars) + RTL-safe (logical properties only).
+   Reuses base .card/.btn/.input/.toolbar/.stat/.grid from styles.css.
+   Coordinator: link this AFTER styles.css in index.html:
+     <link rel="stylesheet" href="assets/css/support.css">
+   ============================================================ */
+
+.sup-wrap { display: block; }
+
+/* ---- channel badges ---- */
+.sup-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; line-height: 1.6;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text-soft);
+}
+.sup-badge__ic { font-size: 11px; }
+.sup-badge--form     { background: color-mix(in srgb, var(--st-pending) 14%, transparent);  color: var(--st-pending); border-color: transparent; }
+.sup-badge--whatsapp { background: color-mix(in srgb, #25d366 16%, transparent);             color: #1ea952;          border-color: transparent; }
+.sup-badge--email    { background: color-mix(in srgb, var(--st-progress) 14%, transparent); color: var(--st-progress); border-color: transparent; }
+.sup-badge--chat     { background: color-mix(in srgb, var(--brand) 14%, transparent);        color: var(--brand);      border-color: transparent; }
+
+/* ---- status pill ---- */
+.sup-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+
+/* ---- inbox layout: list + conversation ---- */
+.sup-inbox {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 16px;
+  margin-top: 16px;
+  align-items: start;
+}
+.sup-pane { padding: 14px; }
+.sup-pane--list { max-height: 72vh; overflow-y: auto; }
+.sup-pane--conv { min-height: 60vh; display: flex; flex-direction: column; }
+
+/* ---- ticket list rows ---- */
+.sup-list { display: flex; flex-direction: column; gap: 8px; }
+.sup-row {
+  display: block; width: 100%; text-align: start;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.sup-row:hover { border-color: var(--brand); }
+.sup-row.is-active { border-color: var(--brand); background: var(--brand-soft); }
+.sup-row__top { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.sup-row__subj { font-weight: 600; font-size: 13.5px; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sup-row__meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.sup-row__assignee { font-size: 11.5px; color: var(--brand); font-weight: 600; }
+.sup-row__sla { display: inline-block; margin-top: 6px; font-size: 11px; color: var(--muted); }
+.sup-row__sla.is-breached { color: var(--st-overdue); font-weight: 700; }
+
+/* ---- conversation pane ---- */
+.sup-conv { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+.sup-conv-empty { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.sup-conv__head { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+.sup-conv__subj { font-size: 16px; font-weight: 700; }
+.sup-conv__meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+
+/* ---- SLA timers ---- */
+.sup-sla-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sup-sla {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 8px 12px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface-2);
+}
+.sup-sla__lbl { font-size: 11px; color: var(--muted); }
+.sup-sla__val { font-size: 13px; font-weight: 700; }
+.sup-sla.is-met { border-color: color-mix(in srgb, var(--st-complete) 50%, var(--border)); }
+.sup-sla.is-met .sup-sla__val { color: var(--st-complete); }
+.sup-sla.is-breached { border-color: var(--st-overdue); background: color-mix(in srgb, var(--st-overdue) 8%, transparent); }
+.sup-sla.is-breached .sup-sla__val { color: var(--st-overdue); }
+
+/* ---- controls ---- */
+.sup-conv__controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.sup-ctl { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+.sup-ctl .input { min-width: 130px; }
+
+/* ---- thread ---- */
+.sup-thread {
+  flex: 1; min-height: 160px; max-height: 46vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 6px 2px;
+}
+.sup-msg { max-width: 78%; padding: 9px 12px; border-radius: var(--radius-sm); font-size: 13.5px; }
+.sup-msg__who { font-size: 11px; color: var(--muted); margin-bottom: 3px; font-weight: 600; }
+.sup-msg__body { line-height: 1.5; word-wrap: break-word; }
+.sup-msg__ts { margin-top: 4px; font-size: 10.5px; }
+.sup-msg--cust { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); }
+.sup-msg--agent { align-self: flex-end; background: var(--brand-soft); border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); }
+
+/* ---- reply box ---- */
+.sup-reply { display: flex; gap: 10px; align-items: flex-end; border-top: 1px solid var(--border); padding-top: 12px; }
+.sup-reply__box { flex: 1; resize: vertical; min-height: 52px; }
+
+/* ---- cloud-off note ---- */
+.sup-cloudoff { text-align: center; padding: 40px 24px; }
+.sup-cloudoff .empty__icon { font-size: 40px; }
+
+/* ---- responsive ---- */
+@media (max-width: 900px) {
+  .sup-inbox { grid-template-columns: 1fr; }
+  .sup-pane--list { max-height: 40vh; }
+  .sup-msg { max-width: 90%; }
+}

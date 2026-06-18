@@ -1,0 +1,171 @@
+/* ============================================================
+   Ajrly OS — Live Ops Room (team.js) styles            [WS-B]
+   Theme-aware (CSS vars), RTL-safe (logical props / flex).
+   Coordinator must <link> this in index.html if used.
+   ============================================================ */
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+}
+.team-card__top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.team-card__avatar {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 17px;
+  color: #fff;
+  background: var(--brand);
+  flex: 0 0 auto;
+}
+.team-card__name {
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.team-card__role {
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+}
+
+/* status dot */
+.pdot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted, #9ca3af);
+  flex: 0 0 auto;
+}
+.pdot--online { background: var(--st-complete, #16a34a); }
+.pdot--idle   { background: var(--pr-medium, #f59e0b); }
+.pdot--offline{ background: var(--muted, #9ca3af); }
+
+/* subtle pulse only when online */
+.pdot--online {
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--st-complete, #16a34a) 60%, transparent);
+  animation: pdot-pulse 2s infinite;
+}
+@keyframes pdot-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--st-complete, #16a34a) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 7px color-mix(in srgb, var(--st-complete, #16a34a) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--st-complete, #16a34a) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pdot--online { animation: none; }
+}
+
+.team-card__status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--muted, #6b7280);
+}
+
+.team-card__task {
+  font-size: 13px;
+  background: var(--surface-2, #f3f4f6);
+  border-radius: 10px;
+  padding: 7px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-card__stats {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.team-stat { display: flex; flex-direction: column; }
+.team-stat__v { font-weight: 700; font-size: 16px; }
+.team-stat__l { font-size: 11px; color: var(--muted, #6b7280); }
+
+.team-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.team-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  color: var(--brand);
+  font-weight: 600;
+}
+.team-badge--ext {
+  background: color-mix(in srgb, var(--pr-high, #ef4444) 14%, transparent);
+  color: var(--pr-high, #ef4444);
+}
+
+/* offline / cloud-not-enabled note */
+.team-cloud-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted, #6b7280);
+}
+
+/* extended activity timeline */
+.team-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+.tl-row {
+  display: grid;
+  grid-template-columns: 90px 16px 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+.tl-row__time { color: var(--muted, #6b7280); white-space: nowrap; }
+.tl-row__dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--muted, #9ca3af);
+}
+.tl-row__dot--active { background: var(--st-complete, #16a34a); }
+.tl-row__dot--idle   { background: var(--pr-medium, #f59e0b); }
+.tl-row__dot--focus  { background: var(--brand); }
+.tl-row__dot--blur   { background: var(--muted, #9ca3af); }
+.tl-row__kind { font-weight: 600; text-transform: capitalize; }
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--st-complete, #16a34a);
+  font-weight: 600;
+}
+.live-pill__dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--st-complete, #16a34a);
+  animation: pdot-pulse 2s infinite;
+}
