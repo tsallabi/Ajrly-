@@ -325,6 +325,13 @@ tr:hover .row-actions { opacity: 1; }
 .empty { text-align: center; padding: 50px 20px; color: var(--muted); }
 .empty__icon { font-size: 44px; margin-bottom: 12px; }
 
+/* ===================== Auth gate ===================== */
+body.authing .sidebar, body.authing .topbar { display: none; }
+.auth-wrap { min-height: calc(100vh - 48px); display: grid; place-items: center; }
+.auth-card { width: min(400px, 100%); padding: 26px; }
+.auth-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.auth-brand .brand__logo { width: 46px; height: 46px; }
+
 /* ===================== Misc ===================== */
 .section-title { font-size: 16px; font-weight: 700; margin: 26px 0 14px; }
 .flex { display: flex; align-items: center; gap: 10px; }

@@ -1,111 +1,148 @@
 /* ============================================================
-   Ajrly OS — Auth helpers (Supabase, optional)
-   Every function is null-safe / no-op when Supabase is not
-   configured, so the rest of the app never has to branch.
+   Ajrly OS — Self-contained Auth, Users, Roles & Permissions
+   100% local (localStorage + Web Crypto). NO backend required.
+   - First registered user becomes the system Admin (owner).
+   - Passwords are salted + SHA-256 hashed (never stored in plain text).
+   - Roles: admin | manager | member | viewer.
    ============================================================ */
 
-import { getSupabase, isConfigured } from "./supabaseClient.js";
+const USERS_KEY = "ajrly_users_v1";
+const SESSION_KEY = "ajrly_session_v1";
 
-export { isConfigured };
+export const ROLES = ["admin", "manager", "member", "viewer"];
 
-/**
- * Sign in with email + password.
- * @returns {Promise<{data:any, error:({message:string}|null)}>}
- */
-export async function signIn(email, password) {
-  const sb = await getSupabase();
-  if (!sb) return { data: null, error: { message: "Supabase is not configured." } };
-  const { data, error } = await sb.auth.signInWithPassword({
-    email: (email || "").trim(),
-    password: password || "",
-  });
-  return { data, error };
+/* Capability matrix per role */
+const PERMS = {
+  admin:   { manageUsers: true,  write: true,  assign: true,  del: true,  settings: true },
+  manager: { manageUsers: false, write: true,  assign: true,  del: true,  settings: true },
+  member:  { manageUsers: false, write: true,  assign: false, del: false, settings: false },
+  viewer:  { manageUsers: false, write: false, assign: false, del: false, settings: false },
+};
+
+/* ---------- storage ---------- */
+function load() { try { return JSON.parse(localStorage.getItem(USERS_KEY)) || []; } catch (e) { return []; } }
+function save(list) { try { localStorage.setItem(USERS_KEY, JSON.stringify(list)); } catch (e) {} }
+const uid = () => "u" + Math.random().toString(36).slice(2, 9);
+const norm = (e) => String(e || "").trim().toLowerCase();
+
+/* ---------- password hashing (Web Crypto, with graceful fallback) ---------- */
+function genSalt() { return Math.random().toString(36).slice(2, 14); }
+async function hashPw(pw, salt) {
+  const data = new TextEncoder().encode(salt + "::" + pw);
+  if (crypto && crypto.subtle && crypto.subtle.digest) {
+    const buf = await crypto.subtle.digest("SHA-256", data);
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  // Fallback (non-secure contexts): simple string hash so the app still works.
+  let h = 0; const s = salt + "::" + pw;
+  for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; }
+  return "f" + (h >>> 0).toString(16);
 }
 
-/** Sign the current user out. No-op when unconfigured. */
-export async function signOut() {
-  const sb = await getSupabase();
-  if (!sb) return { error: null };
-  const { error } = await sb.auth.signOut();
-  return { error };
+/* ---------- session ---------- */
+function setSession(userId) { try { localStorage.setItem(SESSION_KEY, JSON.stringify({ userId, ts: Date.now() })); } catch (e) {} }
+export function logout() { try { localStorage.removeItem(SESSION_KEY); } catch (e) {} }
+export function currentUser() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY));
+    if (!s) return null;
+    const u = load().find(x => x.id === s.userId);
+    return (u && u.active) ? u : null;
+  } catch (e) { return null; }
 }
 
-/** Current session object, or null. */
-export async function getSession() {
-  const sb = await getSupabase();
-  if (!sb) return null;
-  const { data } = await sb.auth.getSession();
-  return data ? data.session : null;
+/* ---------- queries ---------- */
+export function users() { return load(); }
+export function hasUsers() { return load().length > 0; }
+export function role() { const u = currentUser(); return u ? u.role : null; }
+export function can(action, user) {
+  user = user || currentUser();
+  if (!user) return false;
+  const p = PERMS[user.role] || PERMS.viewer;
+  return !!p[action];
+}
+export function publicUser(u) { return u ? { id: u.id, name: u.name, email: u.email, role: u.role, active: u.active } : null; }
+
+/* ---------- auth flows ---------- */
+export async function register({ name, email, password, role: r }) {
+  const list = load();
+  name = (name || "").trim(); email = norm(email);
+  if (!name || !email || !password) return { error: "missing" };
+  if (password.length < 4) return { error: "weak" };
+  if (list.some(u => u.email === email)) return { error: "exists" };
+  const salt = genSalt();
+  const passHash = await hashPw(password, salt);
+  const isFirst = list.length === 0;
+  const user = {
+    id: uid(), name, email, salt, passHash,
+    role: isFirst ? "admin" : (ROLES.includes(r) ? r : "member"),
+    active: true, createdAt: new Date().toISOString(),
+  };
+  list.push(user); save(list); setSession(user.id);
+  return { user };
 }
 
-/** Current authenticated user, or null. */
-export async function currentUser() {
-  const session = await getSession();
-  return session ? session.user : null;
+export async function login(email, password) {
+  email = norm(email);
+  const u = load().find(x => x.email === email);
+  if (!u) return { error: "invalid" };
+  if (!u.active) return { error: "disabled" };
+  const h = await hashPw(password, u.salt);
+  if (h !== u.passHash) return { error: "invalid" };
+  setSession(u.id);
+  return { user: u };
 }
 
-/**
- * The signed-in user's profile (id, full_name, role) or null.
- * Reads the `profiles` table.
- */
-export async function getProfile() {
-  const sb = await getSupabase();
-  if (!sb) return null;
-  const user = await currentUser();
-  if (!user) return null;
-  const { data, error } = await sb
-    .from("profiles")
-    .select("id, full_name, role")
-    .eq("id", user.id)
-    .single();
-  if (error) return null;
-  return data;
+/* ---------- admin user management ---------- */
+export async function addUser({ name, email, password, role: r }) {
+  // Like register but never logs in / never auto-admin.
+  const list = load();
+  name = (name || "").trim(); email = norm(email);
+  if (!name || !email || !password) return { error: "missing" };
+  if (list.some(u => u.email === email)) return { error: "exists" };
+  const salt = genSalt();
+  const passHash = await hashPw(password, salt);
+  const user = { id: uid(), name, email, salt, passHash, role: ROLES.includes(r) ? r : "member", active: true, createdAt: new Date().toISOString() };
+  list.push(user); save(list);
+  return { user };
 }
 
-/** The signed-in user's role ('admin'|'manager'|'member'|'viewer') or null. */
-export async function getRole() {
-  const profile = await getProfile();
-  return profile ? profile.role : null;
+export function updateUser(id, patch) {
+  const list = load();
+  const i = list.findIndex(u => u.id === id);
+  if (i < 0) return { error: "notfound" };
+  // protect: keep at least one active admin
+  const next = { ...list[i], ...patch };
+  if ((list[i].role === "admin") && (patch.role && patch.role !== "admin" || patch.active === false)) {
+    const otherAdmins = list.filter(u => u.id !== id && u.role === "admin" && u.active);
+    if (!otherAdmins.length) return { error: "lastadmin" };
+  }
+  list[i] = next; save(list);
+  return { user: next };
 }
 
-/** True if the current role may write (admin or manager). */
-export async function canManage() {
-  const role = await getRole();
-  return role === "admin" || role === "manager";
+export async function setPassword(id, password) {
+  if (!password || password.length < 4) return { error: "weak" };
+  const list = load();
+  const i = list.findIndex(u => u.id === id);
+  if (i < 0) return { error: "notfound" };
+  const salt = genSalt();
+  list[i] = { ...list[i], salt, passHash: await hashPw(password, salt) };
+  save(list);
+  return { user: list[i] };
 }
 
-/**
- * List all profiles (team). Visible to any authenticated user per RLS,
- * but callers typically gate the UI to admin/manager.
- */
-export async function listProfiles() {
-  const sb = await getSupabase();
-  if (!sb) return [];
-  const { data, error } = await sb
-    .from("profiles")
-    .select("id, full_name, role, created_at")
-    .order("created_at", { ascending: true });
-  if (error) return [];
-  return data || [];
+export function removeUser(id) {
+  const list = load();
+  const u = list.find(x => x.id === id);
+  if (!u) return { error: "notfound" };
+  if (u.role === "admin") {
+    const otherAdmins = list.filter(x => x.id !== id && x.role === "admin" && x.active);
+    if (!otherAdmins.length) return { error: "lastadmin" };
+  }
+  save(list.filter(x => x.id !== id));
+  return { ok: true };
 }
 
-/**
- * Subscribe to auth state changes.
- * @param {(event:string, session:any)=>void} cb
- * @returns {Function} unsubscribe (no-op when unconfigured)
- */
-export function onChange(cb) {
-  let unsubscribe = () => {};
-  // getSupabase() is async (lazy lib load); wire up once ready, but return
-  // a synchronous unsubscribe handle immediately.
-  getSupabase().then((sb) => {
-    if (!sb) return;
-    const { data } = sb.auth.onAuthStateChange((event, session) => {
-      try { cb(event, session); } catch (e) { /* ignore */ }
-    });
-    unsubscribe = () => {
-      try { data.subscription.unsubscribe(); } catch (e) { /* ignore */ }
-    };
-  }).catch(() => {});
-  return () => unsubscribe();
-}
+/* Names for assignment dropdowns (active users) */
+export function teamNames() { return load().filter(u => u.active).map(u => u.name); }

@@ -1,270 +1,211 @@
 /* ============================================================
-   Ajrly OS — Account / Auth / Roles module
-   Routed page (#/account). Three states:
-     1. Not configured  -> Supabase setup card (URL + anon key)
-     2. Configured + logged out -> email/password login
-     3. Logged in -> profile, role badge, team list, sign out
-   Bilingual (ar/en), RTL & dark aware. Degrades gracefully:
-   the whole app keeps working on localStorage regardless.
+   Ajrly OS — Account & Team management (self-contained)
+   Routed page (#/account):
+     • Everyone: their profile + change password + sign out.
+     • Admin: full user management (add employee, set role,
+       activate/deactivate, reset password, delete).
+   No backend — uses the local auth engine.
    ============================================================ */
-
 import { registerModule } from "../registry.js";
 import { registerStrings, t, getLang } from "../i18n.js";
-import { isConfigured, getConfig, saveConfig, clearConfig } from "../supabaseClient.js";
-import {
-  signIn, signOut, currentUser, getProfile, listProfiles, onChange,
-} from "../auth.js";
+import { currentUser, users, can, ROLES, logout, updateUser, addUser, setPassword, removeUser } from "../auth.js";
 
 registerStrings({
   ar: {
     "nav.account": "الحساب",
     "page.account": "الحساب والصلاحيات",
-    "page.account.sub": "تسجيل الدخول وإدارة الفريق",
-    "acc.setup.title": "ربط قاعدة البيانات (Supabase)",
-    "acc.setup.desc": "التطبيق يعمل محليًا بدون إعداد. لتفعيل المزامنة والصلاحيات أدخل بيانات مشروع Supabase الخاص بك.",
-    "acc.setup.url": "رابط المشروع (Project URL)",
-    "acc.setup.key": "المفتاح العام (anon public key)",
-    "acc.setup.save": "حفظ الإعداد",
-    "acc.setup.how": "كيفية الإعداد",
-    "acc.setup.how1": "أنشئ مشروعًا على supabase.com",
-    "acc.setup.how2": "شغّل ملفات schema.sql ثم policies.sql ثم seed.sql",
-    "acc.setup.how3": "انسخ Project URL و anon key من إعدادات الـ API",
-    "acc.setup.note": "المفتاح العام آمن للمشاركة — الحماية الحقيقية عبر سياسات RLS. لا تستخدم مفتاح service_role هنا أبدًا.",
-    "acc.login.title": "تسجيل الدخول",
-    "acc.login.email": "البريد الإلكتروني",
-    "acc.login.pw": "كلمة المرور",
-    "acc.login.btn": "دخول",
-    "acc.login.wait": "جارٍ الدخول...",
-    "acc.login.err": "تعذّر تسجيل الدخول. تحقق من البيانات.",
+    "page.account.sub": "ملفّك الشخصي وإدارة الفريق",
     "acc.me.title": "حسابي",
     "acc.me.role": "الصلاحية",
     "acc.me.signout": "تسجيل الخروج",
-    "acc.team.title": "الفريق",
-    "acc.team.empty": "لا توجد ملفات أعضاء بعد",
-    "acc.reconfig": "تغيير إعداد قاعدة البيانات",
-    "acc.connected": "متصل بـ Supabase",
+    "acc.me.changepw": "تغيير كلمة المرور",
+    "acc.me.newpw": "كلمة مرور جديدة",
+    "acc.me.pwchanged": "تم تغيير كلمة المرور",
+    "acc.team.title": "إدارة الفريق والمستخدمين",
+    "acc.team.add": "➕ إضافة موظف",
+    "acc.team.empty": "لا يوجد مستخدمون",
+    "acc.team.name": "الاسم", "acc.team.email": "البريد", "acc.team.role": "الصلاحية",
+    "acc.team.status": "الحالة", "acc.team.active": "نشط", "acc.team.disabled": "معطّل",
+    "acc.team.activate": "تفعيل", "acc.team.deactivate": "تعطيل",
+    "acc.team.resetpw": "تعيين كلمة مرور", "acc.team.delete": "حذف",
+    "acc.team.added": "تمت إضافة الموظف", "acc.team.updated": "تم التحديث", "acc.team.deleted": "تم الحذف",
+    "acc.team.err.exists": "البريد مستخدم مسبقاً", "acc.team.err.missing": "أكمل كل الحقول",
+    "acc.team.err.lastadmin": "لا يمكن إزالة آخر مدير عام",
+    "acc.add.title": "إضافة موظف",
     "role.admin": "مدير عام", "role.manager": "مدير", "role.member": "عضو", "role.viewer": "مشاهد",
+    "role.admin.d": "صلاحية كاملة + إدارة المستخدمين",
+    "role.manager.d": "كل العمليات وتكليف المهام (بلا إدارة مستخدمين)",
+    "role.member.d": "تعديل مهامه وإضافة محتوى",
+    "role.viewer.d": "عرض فقط",
+    "fld.name": "الاسم", "fld.email": "البريد الإلكتروني", "fld.password": "كلمة المرور",
+    "btn.save": "حفظ", "btn.cancel": "إلغاء",
   },
   en: {
     "nav.account": "Account",
     "page.account": "Account & Roles",
-    "page.account.sub": "Sign-in and team management",
-    "acc.setup.title": "Connect database (Supabase)",
-    "acc.setup.desc": "The app runs locally with no setup. To enable sync and roles, enter your Supabase project credentials.",
-    "acc.setup.url": "Project URL",
-    "acc.setup.key": "anon public key",
-    "acc.setup.save": "Save configuration",
-    "acc.setup.how": "How to set up",
-    "acc.setup.how1": "Create a project at supabase.com",
-    "acc.setup.how2": "Run schema.sql, then policies.sql, then seed.sql",
-    "acc.setup.how3": "Copy the Project URL and anon key from API settings",
-    "acc.setup.note": "The anon key is safe to share — RLS policies are the real guard. Never use the service_role key here.",
-    "acc.login.title": "Sign in",
-    "acc.login.email": "Email",
-    "acc.login.pw": "Password",
-    "acc.login.btn": "Sign in",
-    "acc.login.wait": "Signing in...",
-    "acc.login.err": "Sign-in failed. Check your credentials.",
+    "page.account.sub": "Your profile and team management",
     "acc.me.title": "My account",
     "acc.me.role": "Role",
     "acc.me.signout": "Sign out",
-    "acc.team.title": "Team",
-    "acc.team.empty": "No member profiles yet",
-    "acc.reconfig": "Change database configuration",
-    "acc.connected": "Connected to Supabase",
+    "acc.me.changepw": "Change password",
+    "acc.me.newpw": "New password",
+    "acc.me.pwchanged": "Password changed",
+    "acc.team.title": "Team & User management",
+    "acc.team.add": "➕ Add employee",
+    "acc.team.empty": "No users",
+    "acc.team.name": "Name", "acc.team.email": "Email", "acc.team.role": "Role",
+    "acc.team.status": "Status", "acc.team.active": "Active", "acc.team.disabled": "Disabled",
+    "acc.team.activate": "Activate", "acc.team.deactivate": "Deactivate",
+    "acc.team.resetpw": "Set password", "acc.team.delete": "Delete",
+    "acc.team.added": "Employee added", "acc.team.updated": "Updated", "acc.team.deleted": "Deleted",
+    "acc.team.err.exists": "Email already used", "acc.team.err.missing": "Fill all fields",
+    "acc.team.err.lastadmin": "Cannot remove the last admin",
+    "acc.add.title": "Add employee",
     "role.admin": "Admin", "role.manager": "Manager", "role.member": "Member", "role.viewer": "Viewer",
+    "role.admin.d": "Full access + user management",
+    "role.manager.d": "All ops and task assignment (no user mgmt)",
+    "role.member.d": "Edit own tasks and add content",
+    "role.viewer.d": "Read only",
+    "fld.name": "Name", "fld.email": "Email", "fld.password": "Password",
+    "btn.save": "Save", "btn.cancel": "Cancel",
   },
 });
 
-const esc = (s) => (window.AjrlyOS && window.AjrlyOS.esc ? window.AjrlyOS.esc(s)
-  : String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])));
-
-const roleColors = {
-  admin:   "var(--brand)",
-  manager: "var(--st-complete, #16a34a)",
-  member:  "var(--muted)",
-  viewer:  "var(--muted)",
-};
-
-function roleBadge(role) {
-  const r = role || "member";
-  const color = roleColors[r] || "var(--muted)";
-  return `<span class="badge" style="background:transparent;border:1px solid ${color};color:${color}">${esc(t("role." + r))}</span>`;
-}
-
+const OS = () => window.AjrlyOS || {};
+const esc = (s) => (OS().esc ? OS().esc(s) : String(s ?? ""));
 const initials = (s) => String(s || "?").trim().slice(0, 2).toUpperCase();
-
-/* ---------- View (synchronous shell; data loaded in mount) ---------- */
+const roleColor = { admin: "var(--brand)", manager: "var(--st-complete)", member: "var(--st-progress)", viewer: "var(--muted)" };
+function roleBadge(r) { const c = roleColor[r] || "var(--muted)"; return `<span class="badge" style="background:color-mix(in srgb, ${c} 14%, transparent);color:${c}">${esc(t("role." + r))}</span>`; }
 
 function view() {
-  if (!isConfigured()) return setupCard();
-  // Configured: render a placeholder; mount() decides login vs profile.
-  return `<div id="accRoot" class="grid"><div class="card"><div class="empty"><div class="empty__icon">⏳</div></div></div></div>`;
-}
+  const me = currentUser();
+  if (!me) return `<div class="card"><div class="empty"><div class="empty__icon">🔒</div></div></div>`;
+  const manage = can("manageUsers", me);
 
-function setupCard() {
-  const { url, anonKey } = getConfig();
-  return `
-  <div class="grid">
-    <div class="card">
-      <h3 style="margin-top:0">🔌 ${esc(t("acc.setup.title"))}</h3>
-      <p class="muted">${esc(t("acc.setup.desc"))}</p>
-      <div class="field"><label>${esc(t("acc.setup.url"))}</label>
-        <input id="sb_url" placeholder="https://xxxx.supabase.co" value="${esc(url)}" /></div>
-      <div class="field"><label>${esc(t("acc.setup.key"))}</label>
-        <input id="sb_key" placeholder="eyJhbGciOi..." value="${esc(anonKey)}" /></div>
-      <button class="btn btn--primary" id="sb_save">${esc(t("acc.setup.save"))}</button>
+  const profile = `
+  <div class="card">
+    <div class="flex" style="gap:14px;align-items:center;margin-bottom:14px">
+      <div class="user-chip__avatar" style="width:54px;height:54px;font-size:20px">${esc(initials(me.name))}</div>
+      <div>
+        <div style="font-weight:700;font-size:17px">${esc(me.name)}</div>
+        <div class="muted">${esc(me.email)}</div>
+        <div style="margin-top:6px">${roleBadge(me.role)}</div>
+      </div>
     </div>
-    <div class="card">
-      <h3 style="margin-top:0">📖 ${esc(t("acc.setup.how"))}</h3>
-      <ol class="muted" style="padding-inline-start:18px;line-height:1.9">
-        <li>${esc(t("acc.setup.how1"))}</li>
-        <li>${esc(t("acc.setup.how2"))}</li>
-        <li>${esc(t("acc.setup.how3"))}</li>
-      </ol>
-      <p class="muted" style="font-size:.85em;border-top:1px solid var(--border);padding-top:10px">
-        🔒 ${esc(t("acc.setup.note"))}</p>
+    <div class="field"><label>${t("acc.me.newpw")}</label>
+      <div class="flex" style="gap:8px">
+        <input id="me_pw" type="password" class="input" style="flex:1" placeholder="••••••" />
+        <button class="btn" id="me_pw_btn">${t("acc.me.changepw")}</button>
+      </div>
     </div>
+    <button class="btn btn--danger" id="me_signout" style="margin-top:14px">⎋ ${t("acc.me.signout")}</button>
   </div>`;
-}
 
-function loginCard(errMsg) {
-  return `
-  <div class="card" style="max-width:420px">
-    <h3 style="margin-top:0">🔑 ${esc(t("acc.login.title"))}</h3>
-    <p class="muted" style="font-size:.85em">✅ ${esc(t("acc.connected"))}</p>
-    <div class="field"><label>${esc(t("acc.login.email"))}</label>
-      <input id="li_email" type="email" autocomplete="username" /></div>
-    <div class="field"><label>${esc(t("acc.login.pw"))}</label>
-      <input id="li_pw" type="password" autocomplete="current-password" /></div>
-    ${errMsg ? `<p style="color:#dc2626;font-size:.9em;margin:6px 0">${esc(errMsg)}</p>` : ""}
-    <button class="btn btn--primary" id="li_btn">${esc(t("acc.login.btn"))}</button>
-    <button class="btn" id="li_reconfig" style="margin-inline-start:8px">${esc(t("acc.reconfig"))}</button>
-  </div>`;
-}
-
-function profileCard(user, profile, team, canManage) {
-  const name = (profile && profile.full_name) || user.email;
-  const role = profile && profile.role;
-  let teamHtml = "";
-  if (canManage) {
-    teamHtml = `
+  let team = "";
+  if (manage) {
+    const list = users();
+    team = `
     <div class="card">
-      <h3 style="margin-top:0">👥 ${esc(t("acc.team.title"))}</h3>
-      ${team.length ? `<div class="grid">${team.map(p => `
-        <div class="flex" style="gap:10px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:8px 0">
-          <span class="flex" style="gap:10px;align-items:center">
-            <span class="avatar-sm">${esc(initials(p.full_name))}</span>
-            <span>${esc(p.full_name || "—")}</span>
-          </span>
-          ${roleBadge(p.role)}
-        </div>`).join("")}</div>`
-      : `<div class="empty"><p class="muted">${esc(t("acc.team.empty"))}</p></div>`}
+      <div class="card__head">
+        <span class="card__title">${t("acc.team.title")}</span>
+        <button class="btn btn--primary btn--sm" id="usr_add">${t("acc.team.add")}</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th>${t("acc.team.name")}</th><th>${t("acc.team.email")}</th>
+          <th>${t("acc.team.role")}</th><th>${t("acc.team.status")}</th><th></th>
+        </tr></thead>
+        <tbody>${list.map(u => `<tr data-uid="${u.id}">
+          <td><span class="flex" style="gap:8px"><span class="avatar-sm">${esc(initials(u.name))}</span>${esc(u.name)}</span></td>
+          <td class="muted">${esc(u.email)}</td>
+          <td>
+            <select class="input usr-role" data-uid="${u.id}">
+              ${ROLES.map(r => `<option value="${r}" ${u.role === r ? "selected" : ""}>${esc(t("role." + r))}</option>`).join("")}
+            </select>
+          </td>
+          <td>${u.active ? `<span class="badge badge--complete">${t("acc.team.active")}</span>` : `<span class="badge badge--closed">${t("acc.team.disabled")}</span>`}</td>
+          <td><div class="flex" style="gap:6px">
+            <button class="btn btn--sm usr-toggle" data-uid="${u.id}">${u.active ? t("acc.team.deactivate") : t("acc.team.activate")}</button>
+            <button class="btn btn--sm usr-pw" data-uid="${u.id}">🔑</button>
+            <button class="btn btn--sm btn--danger usr-del" data-uid="${u.id}">🗑</button>
+          </div></td>
+        </tr>`).join("")}</tbody>
+      </table></div>
+      <div class="muted" style="margin-top:12px;line-height:1.9">
+        ${ROLES.map(r => `<div>${roleBadge(r)} <span style="font-size:12px">${esc(t("role." + r + ".d"))}</span></div>`).join("")}
+      </div>
     </div>`;
   }
-  return `
-  <div class="grid cards-2">
-    <div class="card">
-      <h3 style="margin-top:0">👤 ${esc(t("acc.me.title"))}</h3>
-      <div class="flex" style="gap:12px;align-items:center;margin-bottom:12px">
-        <span class="avatar-sm" style="width:42px;height:42px;font-size:1em">${esc(initials(name))}</span>
-        <div>
-          <div style="font-weight:600">${esc(name)}</div>
-          <div class="muted" style="font-size:.85em">${esc(user.email)}</div>
-        </div>
+
+  return `<div class="grid cards-2" style="align-items:start">${profile}${team}</div>`;
+}
+
+function addUserModal() {
+  const op = OS();
+  op.openModal(`
+    <div class="modal__head"><h3>${t("acc.add.title")}</h3><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal__body">
+      <div class="field"><label>${t("fld.name")}</label><input id="u_name" /></div>
+      <div class="field"><label>${t("fld.email")}</label><input id="u_email" type="email" /></div>
+      <div class="field"><label>${t("fld.password")}</label><input id="u_pw" type="text" placeholder="••••" /></div>
+      <div class="field"><label>${t("acc.team.role")}</label>
+        <select id="u_role">${ROLES.filter(r => r !== "admin").map(r => `<option value="${r}">${esc(t("role." + r))}</option>`).join("")}<option value="admin">${esc(t("role.admin"))}</option></select>
       </div>
-      <div class="flex" style="gap:8px;align-items:center;margin-bottom:14px">
-        <span class="muted">${esc(t("acc.me.role"))}:</span> ${roleBadge(role)}
-      </div>
-      <button class="btn btn--primary" id="me_signout">${esc(t("acc.me.signout"))}</button>
-      <button class="btn" id="me_reconfig" style="margin-inline-start:8px">${esc(t("acc.reconfig"))}</button>
+      <p id="u_err" style="color:var(--st-overdue);font-size:12.5px"></p>
     </div>
-    ${teamHtml}
-  </div>`;
-}
-
-/* ---------- Mount ---------- */
-
-let unsub = null;
-
-async function mount(ctx) {
-  const { render, toast } = ctx;
-
-  // State 1: setup card
-  if (!isConfigured()) {
-    const save = document.querySelector("#sb_save");
-    if (save) save.onclick = () => {
-      const url = (document.querySelector("#sb_url").value || "").trim();
-      const key = (document.querySelector("#sb_key").value || "").trim();
-      if (!url || !key) { toast(t("acc.login.err")); return; }
-      saveConfig(url, key);
-      toast(t("toast.saved"));
-      render();
-    };
-    return;
-  }
-
-  const root = document.querySelector("#accRoot");
-  if (!root) return;
-
-  // Subscribe to auth changes so the page reacts to sign in/out.
-  if (unsub) { unsub(); unsub = null; }
-  unsub = onChange(() => render());
-
-  const user = await currentUser();
-
-  // State 2: logged out -> login form
-  if (!user) {
-    root.innerHTML = loginCard("");
-    bindLogin(root, render, toast);
-    return;
-  }
-
-  // State 3: logged in -> profile + team
-  const profile = await getProfile();
-  const canManage = profile && (profile.role === "admin" || profile.role === "manager");
-  const team = canManage ? await listProfiles() : [];
-  root.innerHTML = profileCard(user, profile, team, canManage);
-
-  const out = root.querySelector("#me_signout");
-  if (out) out.onclick = async () => { await signOut(); toast(t("acc.me.signout")); render(); };
-  const re = root.querySelector("#me_reconfig");
-  if (re) re.onclick = () => { reconfigure(render); };
-}
-
-function bindLogin(root, render, toast) {
-  const btn = root.querySelector("#li_btn");
-  const re = root.querySelector("#li_reconfig");
-  if (re) re.onclick = () => reconfigure(render);
-  if (!btn) return;
-  btn.onclick = async () => {
-    const email = root.querySelector("#li_email").value;
-    const pw = root.querySelector("#li_pw").value;
-    btn.disabled = true;
-    btn.textContent = t("acc.login.wait");
-    const { error } = await signIn(email, pw);
-    if (error) {
-      root.innerHTML = loginCard(error.message || t("acc.login.err"));
-      bindLogin(root, render, toast);
-      return;
-    }
-    toast(t("toast.saved"));
-    render();
+    <div class="modal__foot">
+      <button class="btn" data-close>${t("btn.cancel")}</button>
+      <button class="btn btn--primary" id="u_save">${t("btn.save")}</button>
+    </div>`);
+  const q = (s) => document.querySelector(s);
+  q("#u_save").onclick = async () => {
+    const r = await addUser({ name: q("#u_name").value, email: q("#u_email").value, password: q("#u_pw").value, role: q("#u_role").value });
+    if (r.error) { q("#u_err").textContent = t("acc.team.err." + r.error) || r.error; return; }
+    op.closeModal(); op.toast(t("acc.team.added")); op.render();
   };
+  document.querySelectorAll("[data-close]").forEach(b => b.onclick = op.closeModal);
 }
 
-function reconfigure(render) {
-  // Sign out (best effort) then clear stored config to return to setup.
-  signOut().finally(() => { clearConfig(); render(); });
+function mount() {
+  const op = OS();
+  const me = currentUser();
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => [...document.querySelectorAll(s)];
+
+  $("#me_signout") && ($("#me_signout").onclick = () => { logout(); op.render(); });
+  $("#me_pw_btn") && ($("#me_pw_btn").onclick = async () => {
+    const v = $("#me_pw").value;
+    const r = await setPassword(me.id, v);
+    if (r.error) { op.toast(t("role.viewer")); return; }
+    $("#me_pw").value = ""; op.toast(t("acc.me.pwchanged"));
+  });
+
+  if (can("manageUsers", me)) {
+    $("#usr_add") && ($("#usr_add").onclick = addUserModal);
+    $$(".usr-role").forEach(sel => sel.onchange = () => {
+      const r = updateUser(sel.dataset.uid, { role: sel.value });
+      if (r.error) { op.toast(t("acc.team.err." + r.error)); }
+      op.render();
+    });
+    $$(".usr-toggle").forEach(b => b.onclick = () => {
+      const u = users().find(x => x.id === b.dataset.uid);
+      const r = updateUser(b.dataset.uid, { active: !u.active });
+      op.toast(r.error ? t("acc.team.err." + r.error) : t("acc.team.updated")); op.render();
+    });
+    $$(".usr-pw").forEach(b => b.onclick = async () => {
+      const pw = prompt(t("acc.me.newpw"));
+      if (pw) { await setPassword(b.dataset.uid, pw); op.toast(t("acc.me.pwchanged")); }
+    });
+    $$(".usr-del").forEach(b => b.onclick = () => {
+      if (!confirm(t("acc.team.delete") + "؟")) return;
+      const r = removeUser(b.dataset.uid);
+      op.toast(r.error ? t("acc.team.err." + r.error) : t("acc.team.deleted")); op.render();
+    });
+  }
 }
 
 registerModule({
-  id: "account",
-  icon: "👤",
-  labelKey: "nav.account",
-  titleKey: "page.account",
-  subKey: "page.account.sub",
-  order: 95,
-  view,
-  mount,
+  id: "account", icon: "👤", labelKey: "nav.account",
+  titleKey: "page.account", subKey: "page.account.sub", order: 95,
+  view, mount,
 });
