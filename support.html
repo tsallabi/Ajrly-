@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="تواصل مع فريق دعم أجرلي — Contact Ajrly support" />
+  <title>Ajrly — Support / الدعم</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 130'%3E%3Crect width='240' height='130' rx='28' fill='%231a5cff'/%3E%3Cg stroke='white' stroke-width='26' stroke-linecap='round' fill='none'%3E%3Ccircle cx='62' cy='65' r='31'/%3E%3Cline x1='90' y1='65' x2='200' y2='65'/%3E%3Cline x1='150' y1='65' x2='150' y2='98'/%3E%3Cline x1='192' y1='65' x2='192' y2='105'/%3E%3C/g%3E%3C/svg%3E" />
+  <style>
+    :root{
+      --brand:#1a5cff; --brand-600:#1450e6; --brand-700:#103fc0; --brand-soft:#e7eeff;
+      --accent:#ff9f1c; --ok:#10b981; --err:#ef4444;
+      --bg:#f4f6f8; --surface:#fff; --surface-2:#f8fafc; --border:#e6e9ee;
+      --text:#1a2230; --text-soft:#5b6675; --muted:#8a93a3;
+      --radius:14px; --radius-sm:10px;
+      --shadow:0 8px 30px rgba(20,40,80,.08);
+    }
+    *{box-sizing:border-box}
+    html[dir="rtl"] body{font-family:"IBM Plex Sans Arabic","Inter",system-ui,sans-serif}
+    html[dir="ltr"] body{font-family:"Inter","IBM Plex Sans Arabic",system-ui,sans-serif}
+    body{margin:0;background:var(--bg);color:var(--text);line-height:1.5}
+    a{color:var(--brand);text-decoration:none}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+      padding:14px 22px;background:var(--surface);border-bottom:1px solid var(--border)}
+    .brand{display:flex;align-items:center;gap:10px}
+    .brand__logo{width:38px;height:38px;border-radius:10px;
+      background:linear-gradient(135deg,var(--brand),var(--brand-700));
+      display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px}
+    .brand__name{font-weight:700;font-size:18px}
+    .brand__name span{color:var(--brand)}
+    .langbtn{border:1px solid var(--border);background:var(--surface);color:var(--text);
+      padding:7px 12px;border-radius:999px;cursor:pointer;font-weight:600;font-size:13px}
+    .langbtn:hover{background:var(--surface-2)}
+    .wrap{max-width:640px;margin:36px auto;padding:0 18px}
+    .hero{text-align:center;margin-bottom:24px}
+    .hero h1{font-size:26px;margin:0 0 6px}
+    .hero p{color:var(--text-soft);margin:0}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      box-shadow:var(--shadow);padding:24px}
+    .field{margin-bottom:16px;display:flex;flex-direction:column;gap:6px}
+    label{font-size:13px;font-weight:600;color:var(--text-soft)}
+    .req{color:var(--err)}
+    input,textarea{font:inherit;color:var(--text);background:var(--surface-2);
+      border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 13px;width:100%}
+    input:focus,textarea:focus{outline:none;border-color:var(--brand);background:var(--surface);
+      box-shadow:0 0 0 3px var(--brand-soft)}
+    textarea{resize:vertical;min-height:120px}
+    .row{display:flex;gap:12px}
+    .row .field{flex:1}
+    /* honeypot: visually hidden, off-screen, kept in tab order out */
+    .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      background:var(--brand);color:#fff;border:none;border-radius:var(--radius-sm);
+      padding:13px 20px;font:inherit;font-weight:700;cursor:pointer;width:100%}
+    .btn:hover{background:var(--brand-600)}
+    .btn:disabled{opacity:.6;cursor:default}
+    .note{margin-top:14px;padding:12px 14px;border-radius:var(--radius-sm);font-size:14px;display:none}
+    .note.ok{display:block;background:color-mix(in srgb,var(--ok) 12%,#fff);color:var(--ok);border:1px solid color-mix(in srgb,var(--ok) 40%,transparent)}
+    .note.err{display:block;background:color-mix(in srgb,var(--err) 10%,#fff);color:var(--err);border:1px solid color-mix(in srgb,var(--err) 40%,transparent)}
+    .alt{margin-top:20px;text-align:center;color:var(--muted);font-size:13px}
+    .alt a{font-weight:600}
+    [hidden]{display:none !important}
+
+    /* ---- live chat widget ---- */
+    .chat-fab{position:fixed;inset-block-end:22px;inset-inline-end:22px;width:58px;height:58px;
+      border-radius:50%;background:var(--brand);color:#fff;border:none;font-size:24px;cursor:pointer;
+      box-shadow:0 10px 30px rgba(26,92,255,.4);z-index:50}
+    .chat-fab:hover{background:var(--brand-600)}
+    .chat-panel{position:fixed;inset-block-end:92px;inset-inline-end:22px;width:330px;max-width:calc(100vw - 36px);
+      height:440px;max-height:70vh;background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);box-shadow:var(--shadow);z-index:50;display:flex;flex-direction:column;overflow:hidden}
+    .chat-head{background:var(--brand);color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+    .chat-head button{background:none;border:none;color:#fff;font-size:18px;cursor:pointer}
+    .chat-status{font-size:11px;opacity:.85;font-weight:500}
+    .chat-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--surface-2)}
+    .chat-msg{max-width:82%;padding:8px 11px;border-radius:12px;font-size:13.5px;line-height:1.4}
+    .chat-msg.me{align-self:flex-end;background:var(--brand-soft);color:var(--text)}
+    .chat-msg.them{align-self:flex-start;background:var(--surface);border:1px solid var(--border)}
+    .chat-msg.sys{align-self:center;background:transparent;color:var(--muted);font-size:12px;text-align:center}
+    .chat-input{display:flex;gap:6px;padding:10px;border-top:1px solid var(--border)}
+    .chat-input input{flex:1}
+    .chat-input button{background:var(--brand);color:#fff;border:none;border-radius:var(--radius-sm);padding:0 14px;cursor:pointer;font-weight:700}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand__logo">🔑</div>
+      <span class="brand__name">Ajrly <span>OS</span></span>
+    </div>
+    <button class="langbtn" id="langBtn" type="button">English</button>
+  </header>
+
+  <div class="wrap">
+    <div class="hero">
+      <h1 data-i18n="title">كيف يمكننا مساعدتك؟</h1>
+      <p data-i18n="sub">أرسل لنا رسالتك وسيتواصل معك فريق الدعم في أقرب وقت.</p>
+    </div>
+
+    <div class="card">
+      <form id="contactForm" novalidate>
+        <!-- honeypot (bots fill it; humans never see it) -->
+        <div class="hp" aria-hidden="true">
+          <label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="name"><span data-i18n="f.name">الاسم</span> <span class="req">*</span></label>
+            <input type="text" id="name" name="name" maxlength="120" required autocomplete="name" />
+          </div>
+          <div class="field">
+            <label for="email" data-i18n="f.email">البريد الإلكتروني</label>
+            <input type="email" id="email" name="email" maxlength="200" autocomplete="email" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="phone" data-i18n="f.phone">رقم الهاتف</label>
+            <input type="tel" id="phone" name="phone" maxlength="40" autocomplete="tel" inputmode="tel" />
+          </div>
+          <div class="field">
+            <label for="subject" data-i18n="f.subject">الموضوع</label>
+            <input type="text" id="subject" name="subject" maxlength="200" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="message"><span data-i18n="f.message">رسالتك</span> <span class="req">*</span></label>
+          <textarea id="message" name="message" maxlength="5000" required></textarea>
+        </div>
+
+        <button class="btn" type="submit" id="submitBtn" data-i18n="f.send">إرسال الرسالة</button>
+        <div class="note" id="note" role="status"></div>
+      </form>
+
+      <div class="alt">
+        <span data-i18n="alt.or">أو تواصل عبر</span>
+        <a href="https://wa.me/" id="waLink" target="_blank" rel="noopener">WhatsApp</a> ·
+        <a href="mailto:support@ajrly.ly" id="mailLink">support@ajrly.ly</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---- Live chat widget ---- -->
+  <button class="chat-fab" id="chatFab" type="button" aria-label="Live chat">💬</button>
+  <section class="chat-panel" id="chatPanel" hidden>
+    <div class="chat-head">
+      <div>
+        <div data-i18n="chat.title">الدردشة المباشرة</div>
+        <div class="chat-status" id="chatStatus" data-i18n="chat.connecting">جارٍ الاتصال…</div>
+      </div>
+      <button type="button" id="chatClose" aria-label="close">✕</button>
+    </div>
+    <div class="chat-body" id="chatBody"></div>
+    <div class="chat-input">
+      <input type="text" id="chatText" maxlength="2000" data-i18n-ph="chat.placeholder" placeholder="اكتب رسالة…" />
+      <button type="button" id="chatSend" data-i18n="chat.send">إرسال</button>
+    </div>
+  </section>
+
+  <script>
+  (function () {
+    "use strict";
+
+    /* ---------------- i18n ---------------- */
+    var STR = {
+      ar: {
+        "doc.title": "أجرلي — الدعم",
+        title: "كيف يمكننا مساعدتك؟",
+        sub: "أرسل لنا رسالتك وسيتواصل معك فريق الدعم في أقرب وقت.",
+        "f.name": "الاسم", "f.email": "البريد الإلكتروني", "f.phone": "رقم الهاتف",
+        "f.subject": "الموضوع", "f.message": "رسالتك", "f.send": "إرسال الرسالة",
+        "alt.or": "أو تواصل عبر",
+        "ok": "تم استلام رسالتك! سيتواصل معك فريق الدعم قريباً.",
+        "err.required": "يرجى إدخال الاسم والرسالة.",
+        "err.send": "تعذّر الإرسال. حاول مرة أخرى أو راسلنا مباشرة.",
+        "sending": "جارٍ الإرسال…",
+        "chat.title": "الدردشة المباشرة", "chat.connecting": "جارٍ الاتصال…",
+        "chat.online": "متصل", "chat.offline": "الدردشة غير متاحة حالياً",
+        "chat.placeholder": "اكتب رسالة…", "chat.send": "إرسال",
+        "chat.welcome": "مرحباً! اكتب رسالتك وسيرد عليك فريقنا.",
+        "lang": "English"
+      },
+      en: {
+        "doc.title": "Ajrly — Support",
+        title: "How can we help you?",
+        sub: "Send us a message and our support team will get back to you shortly.",
+        "f.name": "Name", "f.email": "Email", "f.phone": "Phone",
+        "f.subject": "Subject", "f.message": "Your message", "f.send": "Send message",
+        "alt.or": "Or reach us via",
+        "ok": "Got it! Our support team will get back to you soon.",
+        "err.required": "Please enter your name and message.",
+        "err.send": "Could not send. Please try again or contact us directly.",
+        "sending": "Sending…",
+        "chat.title": "Live chat", "chat.connecting": "Connecting…",
+        "chat.online": "Online", "chat.offline": "Chat is unavailable right now",
+        "chat.placeholder": "Type a message…", "chat.send": "Send",
+        "chat.welcome": "Hi! Type your message and our team will reply.",
+        "lang": "العربية"
+      }
+    };
+    var lang = (localStorage.getItem("ajrly_lang") === "en") ? "en" : "ar";
+    function T(k) { return (STR[lang] && STR[lang][k]) || STR.en[k] || k; }
+
+    function applyLang() {
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+      document.title = T("doc.title");
+      document.querySelectorAll("[data-i18n]").forEach(function (el) {
+        el.textContent = T(el.getAttribute("data-i18n"));
+      });
+      document.querySelectorAll("[data-i18n-ph]").forEach(function (el) {
+        el.setAttribute("placeholder", T(el.getAttribute("data-i18n-ph")));
+      });
+      document.getElementById("langBtn").textContent = T("lang");
+      document.getElementById("chatStatus").textContent =
+        chatState === "online" ? T("chat.online")
+        : chatState === "offline" ? T("chat.offline") : T("chat.connecting");
+    }
+
+    document.getElementById("langBtn").addEventListener("click", function () {
+      lang = lang === "ar" ? "en" : "ar";
+      localStorage.setItem("ajrly_lang", lang);
+      applyLang();
+    });
+
+    /* ---------------- contact form ---------------- */
+    var form = document.getElementById("contactForm");
+    var note = document.getElementById("note");
+    var btn = document.getElementById("submitBtn");
+
+    function showNote(kind, msg) { note.className = "note " + kind; note.textContent = msg; }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      note.className = "note"; note.textContent = "";
+
+      var name = form.name.value.trim();
+      var message = form.message.value.trim();
+      if (name.length < 2 || message.length < 5) { showNote("err", T("err.required")); return; }
+
+      var payload = {
+        name: name,
+        email: form.email.value.trim(),
+        phone: form.phone.value.trim(),
+        subject: form.subject.value.trim(),
+        message: message,
+        website: form.website.value // honeypot
+      };
+
+      btn.disabled = true; btn.textContent = T("sending");
+      fetch("/api/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (d) {
+          return { ok: r.ok, d: d };
+        });
+      }).then(function (res) {
+        if (res.ok && res.d && res.d.ok) {
+          form.reset();
+          showNote("ok", T("ok"));
+        } else {
+          showNote("err", T("err.send"));
+        }
+      }).catch(function () {
+        showNote("err", T("err.send"));
+      }).then(function () {
+        btn.disabled = false; btn.textContent = T("f.send");
+      });
+    });
+
+    /* ---------------- live chat widget (DO room via WS) ----------------
+       Connects to /api/realtime (PresenceRoom Durable Object). Degrades
+       gracefully: if WS cannot connect, shows an "unavailable" status and
+       the contact form above remains the reliable channel. */
+    var chatState = "connecting"; // connecting | online | offline
+    var ws = null, wsTried = false;
+    var fab = document.getElementById("chatFab");
+    var panel = document.getElementById("chatPanel");
+    var bodyEl = document.getElementById("chatBody");
+    var textEl = document.getElementById("chatText");
+    var sendBtn = document.getElementById("chatSend");
+    var statusEl = document.getElementById("chatStatus");
+
+    function setChatState(s) {
+      chatState = s;
+      statusEl.textContent = s === "online" ? T("chat.online")
+        : s === "offline" ? T("chat.offline") : T("chat.connecting");
+    }
+    function addMsg(kind, text) {
+      var el = document.createElement("div");
+      el.className = "chat-msg " + kind;
+      el.textContent = text;
+      bodyEl.appendChild(el);
+      bodyEl.scrollTop = bodyEl.scrollHeight;
+    }
+
+    function connectChat() {
+      if (wsTried) return; wsTried = true;
+      var proto = location.protocol === "https:" ? "wss:" : "ws:";
+      try {
+        ws = new WebSocket(proto + "//" + location.host + "/api/realtime");
+      } catch (e) { setChatState("offline"); return; }
+
+      var failTimer = setTimeout(function () {
+        if (chatState !== "online") { setChatState("offline"); try { ws.close(); } catch (_) {} }
+      }, 6000);
+
+      ws.onopen = function () {
+        clearTimeout(failTimer);
+        setChatState("online");
+        if (!bodyEl.childElementCount) addMsg("sys", T("chat.welcome"));
+        // Announce as a guest chat client (server may ignore unknown types).
+        try { ws.send(JSON.stringify({ type: "chat_hello", role: "guest" })); } catch (_) {}
+      };
+      ws.onmessage = function (ev) {
+        var data; try { data = JSON.parse(ev.data); } catch (_) { return; }
+        // Only render agent/chat messages; ignore presence broadcasts etc.
+        if (data && data.type === "chat" && data.body) addMsg("them", String(data.body));
+        else if (data && data.type === "notify" && data.body) addMsg("sys", String(data.body));
+      };
+      ws.onclose = function () { if (chatState !== "offline") setChatState("offline"); };
+      ws.onerror = function () { setChatState("offline"); };
+    }
+
+    function sendChat() {
+      var v = textEl.value.trim();
+      if (!v) return;
+      addMsg("me", v);
+      textEl.value = "";
+      if (ws && ws.readyState === 1) {
+        try { ws.send(JSON.stringify({ type: "chat", role: "guest", body: v })); } catch (_) {}
+      } else {
+        addMsg("sys", T("chat.offline"));
+      }
+    }
+
+    fab.addEventListener("click", function () {
+      var open = !panel.hasAttribute("hidden");
+      if (open) { panel.setAttribute("hidden", ""); return; }
+      panel.removeAttribute("hidden");
+      connectChat();
+      textEl.focus();
+    });
+    document.getElementById("chatClose").addEventListener("click", function () {
+      panel.setAttribute("hidden", "");
+    });
+    sendBtn.addEventListener("click", sendChat);
+    textEl.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); sendChat(); } });
+
+    applyLang();
+  })();
+  </script>
+</body>
+</html>
