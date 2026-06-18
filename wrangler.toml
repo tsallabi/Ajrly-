@@ -9,23 +9,27 @@ compatibility_date = "2026-06-01"
 compatibility_flags = ["nodejs_compat"]
 
 # ============================================================
-# Cloud backend bindings — UNCOMMENT and fill ids AFTER provisioning.
-# (See docs/CLOUD-ARCHITECTURE.md → Provisioning.) Until then the app
-# runs in local mode and these stay commented so deploys never break.
+# Cloud backend bindings (provisioned).
+# Phase 1: D1 + KV (auth, data, tickets, performance).
+# Phase 2 (presence/live-chat): uncomment the Durable Object + migration
+# once core cloud is verified.
 # ============================================================
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "ajrly"
-# database_id = "REPLACE_WITH_D1_ID"
-#
-# [[kv_namespaces]]
-# binding = "KV"
-# id = "REPLACE_WITH_KV_ID"
-#
+[[d1_databases]]
+binding = "DB"
+database_name = "ajrly"
+database_id = "6a319b33-1f27-4afa-97cd-265dc660f2f1"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "685734c205d14d5e98ccc476d3f90115"
+
+[vars]
+SESSION_SECRET = "1a3ad50e15e9241c137411d0f3c9f7c9a1eff4ea32af4cd4d5dfa42a8fd6676f"
+
+# --- Phase 2: real-time presence & live chat (enable after core is verified) ---
 # [[durable_objects.bindings]]
 # name = "PRESENCE"
 # class_name = "PresenceRoom"
-# script_name = "ajrly"
 #
 # [[migrations]]
 # tag = "v1"
