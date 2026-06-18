@@ -629,12 +629,13 @@ function initChrome() {
   $("#menuToggle").onclick = () => sb.classList.toggle("open");
 }
 
+/* Expose a tiny API for feature modules (charts, exports, etc.).
+   Must be set BEFORE the first render so module views can read it. */
+window.AjrlyOS = { db, t, getLang, render, toast, openModal, closeModal, esc, fmtDate, PILLARS, GOALS, TEAM, OWNER_STAGES };
+
 /* Boot */
 window.addEventListener("hashchange", render);
 initChrome();
 buildNav();
 applyLang();
 render();
-
-/* Expose a tiny API for feature modules (charts, exports, etc.) */
-window.AjrlyOS = { db, t, getLang, render, toast, openModal, closeModal, esc, fmtDate, PILLARS, GOALS, TEAM, OWNER_STAGES };

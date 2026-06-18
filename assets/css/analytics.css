@@ -1,0 +1,85 @@
+/* ============================================================
+   Ajrly OS — Analytics & Reporting styles
+   Theme-aware (CSS vars only), RTL-aware, print-friendly.
+   ============================================================ */
+
+/* Toolbar / filters */
+.an-toolbar { flex-wrap: wrap; gap: 10px; }
+.an-toolbar .toolbar__left,
+.an-toolbar .toolbar__right { flex-wrap: wrap; gap: 8px; align-items: center; }
+.an-date { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.an-date .input { min-width: 0; }
+
+/* Chart container */
+.an-chart { margin-top: 6px; }
+
+/* Bar labels — truncate gracefully */
+.an-bar-lbl {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 12.5px; color: var(--text);
+}
+
+/* Donut */
+.an-donut {
+  display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
+}
+.an-donut svg { flex: 0 0 auto; }
+.an-donut__num { font-size: 30px; font-weight: 800; fill: var(--text); }
+.an-donut__cap { font-size: 11px; fill: var(--muted); }
+
+.an-legend { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 140px; }
+.an-legend__item {
+  display: grid; grid-template-columns: 14px 1fr auto; align-items: center;
+  gap: 8px; font-size: 12.5px;
+}
+.an-legend__dot { width: 12px; height: 12px; border-radius: 3px; }
+.an-legend__lbl { color: var(--text); }
+.an-legend__val { font-weight: 700; color: var(--text); }
+
+/* Area / line chart */
+.an-grid { stroke: var(--border); stroke-width: 1; }
+.an-axis { fill: var(--muted); font-size: 10px; }
+.an-dot { fill: var(--surface); stroke: var(--brand); stroke-width: 2; }
+
+/* Funnel */
+.an-funnel { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
+.an-funnel__row { display: flex; align-items: center; gap: 12px; }
+.an-funnel__lbl {
+  flex: 0 0 110px; font-size: 12.5px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.an-funnel__bar {
+  height: 30px; border-radius: 8px; display: flex; align-items: center;
+  justify-content: flex-end; padding-inline: 10px; min-width: 44px;
+  transition: width .35s ease;
+}
+.an-funnel__n { color: #fff; font-weight: 800; font-size: 13px; }
+
+/* Print-only header hidden on screen */
+.an-printonly { display: none; }
+.an-print-head h2 { margin: 0 0 4px; font-size: 20px; }
+
+/* ============================================================
+   Print styles — clean report, hide app chrome.
+   We target shared ids/classes ONLY via @media print (no HTML edits).
+   ============================================================ */
+@media print {
+  /* hide app chrome */
+  .sidebar, #sidebar,
+  .topbar,
+  .toast-host, #toastHost,
+  .modal-host, #modalHost,
+  .an-noprint { display: none !important; }
+
+  /* let content fill the page */
+  .main { margin: 0 !important; }
+  .content, #view { padding: 0 !important; }
+
+  body { background: #fff !important; }
+
+  .an-printonly { display: block !important; }
+
+  /* avoid awkward breaks inside cards */
+  .card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd !important; }
+  .grid { gap: 12px !important; }
+}
