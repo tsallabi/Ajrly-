@@ -1,0 +1,9 @@
+# Cloudflare Pages configuration for Ajrly OS
+# Static SPA, no build step. Pages Functions (if present) are auto-detected
+# from the /functions directory at the project root.
+name = "ajrly"
+pages_build_output_dir = "."
+compatibility_date = "2026-06-01"
+
+# Enable Node.js compatibility APIs for any Pages Functions in /functions.
+compatibility_flags = ["nodejs_compat"]
