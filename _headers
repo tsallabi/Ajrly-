@@ -1,9 +1,11 @@
 # Cloudflare Pages headers — https://developers.cloudflare.com/pages/configuration/headers/
 # Applied edge-side. Order: most-specific paths can override broader ones.
 
-# Long-lived immutable cache for fingerprinted/static assets.
+# Assets are NOT content-hashed (fixed names like styles.css, app.js), so they
+# must revalidate — an immutable long cache would hide updates from returning
+# visitors. Cheap 304s keep it fast while always serving the latest after deploy.
 /assets/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=0, must-revalidate
 
 # Security headers + CSP for every route.
 /*
