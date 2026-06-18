@@ -2,8 +2,9 @@
    Ajrly OS — Application core (router + views)
    ============================================================ */
 import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js";
-import { t, getLang, setLang } from "./i18n.js";
+import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
+import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 import "./modules/analytics.js";
 import "./modules/integrations.js";
@@ -32,6 +33,36 @@ function daysLeft(iso) {
 }
 
 let searchQuery = "";
+
+/* ---- Auth / permissions helpers ---- */
+registerStrings({
+  ar: {
+    "auth.welcome": "منظومة أجرلي", "auth.login": "تسجيل الدخول", "auth.register": "إنشاء حساب",
+    "auth.email": "البريد الإلكتروني", "auth.password": "كلمة المرور", "auth.name": "الاسم الكامل",
+    "auth.haveAccount": "لديك حساب؟ سجّل الدخول", "auth.noAccount": "ليس لديك حساب؟ أنشئ واحداً",
+    "auth.firstNote": "أول حساب يُنشأ سيكون «المدير العام» للمنظومة.",
+    "auth.err.invalid": "بريد أو كلمة مرور غير صحيحة", "auth.err.exists": "هذا البريد مسجّل مسبقاً",
+    "auth.err.missing": "أكمل جميع الحقول", "auth.err.weak": "كلمة المرور قصيرة جداً (4 أحرف على الأقل)",
+    "auth.err.disabled": "هذا الحساب معطّل — راجع المدير", "auth.signedIn": "مرحباً بك 👋",
+    "auth.logout": "خروج", "auth.readonly": "صلاحية العرض فقط — لا يمكنك التعديل",
+  },
+  en: {
+    "auth.welcome": "Ajrly OS", "auth.login": "Sign in", "auth.register": "Create account",
+    "auth.email": "Email", "auth.password": "Password", "auth.name": "Full name",
+    "auth.haveAccount": "Have an account? Sign in", "auth.noAccount": "No account? Create one",
+    "auth.firstNote": "The first account created becomes the system Admin.",
+    "auth.err.invalid": "Invalid email or password", "auth.err.exists": "This email is already registered",
+    "auth.err.missing": "Fill all fields", "auth.err.weak": "Password too short (min 4 chars)",
+    "auth.err.disabled": "This account is disabled — contact your admin", "auth.signedIn": "Welcome 👋",
+    "auth.logout": "Sign out", "auth.readonly": "Viewer role — you can't edit",
+  },
+});
+
+/* dynamic team list (registered active users; falls back to seed names) */
+function team() { const list = teamNames(); return list.length ? list : TEAM; }
+const W = () => can("write");   // may create/edit
+const D = () => can("del");     // may delete
+const A = () => can("assign");  // may assign/delegate
 
 /* ---------------- Toast ---------------- */
 function toast(msg) {
@@ -66,7 +97,7 @@ function viewDashboard() {
   const statusCounts = ["complete", "progress", "pending", "overdue", "closed"].map(s => ({ s, n: by(s) }));
   const maxStatus = Math.max(1, ...statusCounts.map(x => x.n));
 
-  const members = TEAM.map(m => ({ m, n: tasks.filter(x => x.assignedBy === m || x.delegateTo === m).length }));
+  const members = team().map(m => ({ m, n: tasks.filter(x => x.assignedBy === m || x.delegateTo === m).length }));
   const maxMem = Math.max(1, ...members.map(x => x.n));
 
   const pillarMix = PILLARS.map(p => ({ p: p.name, n: db.content.filter(c => c.pillar === p.name).length })).filter(x => x.n > 0);
@@ -178,12 +209,12 @@ function viewTasks() {
   </div>`;
   const memberFilter = `<select class="input" id="memberFilter">
     <option value="">${t("filter.member")}</option>
-    ${TEAM.map(m => `<option value="${m}" ${taskMember === m ? "selected" : ""}>${m}</option>`).join("")}
+    ${team().map(m => `<option value="${m}" ${taskMember === m ? "selected" : ""}>${m}</option>`).join("")}
   </select>`;
   const toolbar = `<div class="toolbar">
     <div class="toolbar__left">${seg}${memberFilter}</div>
     <div class="toolbar__right">
-      <button class="btn btn--primary" id="addTask">＋ ${t("btn.newTask")}</button>
+      ${W() ? `<button class="btn btn--primary" id="addTask">＋ ${t("btn.newTask")}</button>` : ""}
     </div>
   </div>`;
   return toolbar + (tasksMode === "board" ? tasksBoard() : tasksTable());
@@ -230,7 +261,7 @@ function tasksTable() {
         <td>${x.delegateTo ? esc(x.delegateTo) : "—"}</td>
         <td><div class="row-actions">
           <button class="btn btn--ghost btn--sm" data-edit="${x.id}">✎</button>
-          <button class="btn btn--ghost btn--sm btn--danger" data-del="${x.id}">🗑</button>
+          ${D() ? `<button class="btn btn--ghost btn--sm btn--danger" data-del="${x.id}">🗑</button>` : ""}
         </div></td>
       </tr>`).join("")}
     </tbody>
@@ -251,8 +282,8 @@ function taskModal(task) {
         <div class="field"><label>${t("field.status")}</label><select id="f_status">${Object.keys(STATUS_KEYS).map(s => opt(s, x.status, t(STATUS_KEYS[s]))).join("")}</select></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>${t("field.assignedBy")}</label><select id="f_by"><option value=""></option>${TEAM.map(m => opt(m, x.assignedBy, m)).join("")}</select></div>
-        <div class="field"><label>${t("field.delegate")}</label><select id="f_del"><option value=""></option>${TEAM.map(m => opt(m, x.delegateTo, m)).join("")}</select></div>
+        <div class="field"><label>${t("field.assignedBy")}</label><select id="f_by" ${A() ? "" : "disabled"}><option value=""></option>${team().map(m => opt(m, x.assignedBy, m)).join("")}</select></div>
+        <div class="field"><label>${t("field.delegate")}</label><select id="f_del" ${A() ? "" : "disabled"}><option value=""></option>${team().map(m => opt(m, x.delegateTo, m)).join("")}</select></div>
       </div>
       <div class="field-row">
         <div class="field"><label>${t("field.dueDate")}</label><input type="date" id="f_due" value="${esc(x.dueDate || "")}" /></div>
@@ -260,12 +291,12 @@ function taskModal(task) {
       </div>
     </div>
     <div class="modal__foot">
-      ${editing ? `<button class="btn btn--danger" data-delete>${t("btn.delete")}</button>` : ""}
+      ${editing && D() ? `<button class="btn btn--danger" data-delete>${t("btn.delete")}</button>` : ""}
       <button class="btn" data-close>${t("btn.cancel")}</button>
-      <button class="btn btn--primary" data-save>${t("btn.save")}</button>
+      ${W() ? `<button class="btn btn--primary" data-save>${t("btn.save")}</button>` : ""}
     </div>`);
 
-  $("[data-save]").onclick = () => {
+  ($("[data-save]") || {}).onclick = () => {
     const data = {
       title: $("#f_title").value.trim(), description: $("#f_desc").value.trim(),
       priority: $("#f_pri").value, status: $("#f_status").value,
@@ -276,7 +307,7 @@ function taskModal(task) {
     if (editing) db.updateTask(task.id, data); else db.addTask(data);
     closeModal(); render(); toast(t("toast.saved"));
   };
-  if (editing) $("[data-delete]").onclick = () => { db.removeTask(task.id); closeModal(); render(); toast(t("toast.deleted")); };
+  if (editing) ($("[data-delete]") || {}).onclick = () => { db.removeTask(task.id); closeModal(); render(); toast(t("toast.deleted")); };
   $$("[data-close]").forEach(b => b.onclick = closeModal);
 }
 
@@ -292,7 +323,7 @@ function viewContent() {
   </div>`;
   const toolbar = `<div class="toolbar">
     <div class="toolbar__left">${seg}</div>
-    <div class="toolbar__right"><button class="btn btn--primary" id="addPost">＋ ${t("btn.newPost")}</button></div>
+    <div class="toolbar__right">${W() ? `<button class="btn btn--primary" id="addPost">＋ ${t("btn.newPost")}</button>` : ""}</div>
   </div>`;
   return toolbar + (contentMode === "calendar" ? contentCalendar() : contentTable());
 }
@@ -324,7 +355,7 @@ function contentTable() {
       <td>${esc(c.pillar || "—")}</td><td>${esc(c.type || "—")}</td><td>${esc(c.time || "—")}</td>
       <td><div class="row-actions">
         <button class="btn btn--ghost btn--sm" data-cedit="${c.id}">✎</button>
-        <button class="btn btn--ghost btn--sm btn--danger" data-cdel="${c.id}">🗑</button>
+        ${D() ? `<button class="btn btn--ghost btn--sm btn--danger" data-cdel="${c.id}">🗑</button>` : ""}
       </div></td>
     </tr>`).join("")}</tbody>
   </table></div>`;
@@ -358,9 +389,9 @@ function contentModal(post) {
       </div>
     </div>
     <div class="modal__foot">
-      ${editing ? `<button class="btn btn--danger" data-delete>${t("btn.delete")}</button>` : ""}
+      ${editing && D() ? `<button class="btn btn--danger" data-delete>${t("btn.delete")}</button>` : ""}
       <button class="btn" data-close>${t("btn.cancel")}</button>
-      <button class="btn btn--primary" data-save>${t("btn.save")}</button>
+      ${W() ? `<button class="btn btn--primary" data-save>${t("btn.save")}</button>` : ""}
     </div>`);
 
   // toggle platform pills
@@ -372,7 +403,7 @@ function contentModal(post) {
     }, 0);
   });
 
-  $("[data-save]").onclick = () => {
+  ($("[data-save]") || {}).onclick = () => {
     const data = {
       day: $("#c_day").value.trim(), date: $("#c_date").value, goal: $("#c_goal").value,
       pillar: $("#c_pillar").value, type: $("#c_type").value, time: $("#c_time").value,
@@ -382,7 +413,7 @@ function contentModal(post) {
     if (editing) db.updateContent(post.id, data); else db.addContent(data);
     closeModal(); render(); toast(t("toast.saved"));
   };
-  if (editing) $("[data-delete]").onclick = () => { db.removeContent(post.id); closeModal(); render(); toast(t("toast.deleted")); };
+  if (editing) ($("[data-delete]") || {}).onclick = () => { db.removeContent(post.id); closeModal(); render(); toast(t("toast.deleted")); };
   $$("[data-close]").forEach(b => b.onclick = closeModal);
 }
 
@@ -405,7 +436,7 @@ function viewOwners() {
   </div>`;
   const toolbar = `<div class="toolbar">
     <div class="toolbar__left"><span class="card__title">${t("owners.pipeline")}</span><span class="muted">${owners.length} ${t("th.owner")}</span></div>
-    <div class="toolbar__right"><button class="btn btn--primary" id="addOwner">＋ ${t("btn.newOwner")}</button></div>
+    <div class="toolbar__right">${W() ? `<button class="btn btn--primary" id="addOwner">＋ ${t("btn.newOwner")}</button>` : ""}</div>
   </div>`;
   if (!owners.length) {
     return toolbar + pipeline + `<div class="card"><div class="empty">
@@ -426,7 +457,7 @@ function viewOwners() {
       <td>${fmtDate(o.lastContact)}</td>
       <td><div class="row-actions">
         <button class="btn btn--ghost btn--sm" data-oedit="${o.id}">✎</button>
-        <button class="btn btn--ghost btn--sm btn--danger" data-odel="${o.id}">🗑</button>
+        ${D() ? `<button class="btn btn--ghost btn--sm btn--danger" data-odel="${o.id}">🗑</button>` : ""}
       </div></td>
     </tr>`).join("")}</tbody>
   </table></div>`;
@@ -451,11 +482,11 @@ function ownerModal(owner) {
       <div class="field"><label>${t("field.notes")}</label><textarea id="o_notes">${esc(x.notes || "")}</textarea></div>
     </div>
     <div class="modal__foot">
-      ${editing ? `<button class="btn btn--danger" data-delete>${t("btn.delete")}</button>` : ""}
+      ${editing && D() ? `<button class="btn btn--danger" data-delete>${t("btn.delete")}</button>` : ""}
       <button class="btn" data-close>${t("btn.cancel")}</button>
-      <button class="btn btn--primary" data-save>${t("btn.save")}</button>
+      ${W() ? `<button class="btn btn--primary" data-save>${t("btn.save")}</button>` : ""}
     </div>`);
-  $("[data-save]").onclick = () => {
+  ($("[data-save]") || {}).onclick = () => {
     const data = {
       name: $("#o_name").value.trim(), phone: $("#o_phone").value.trim(), email: $("#o_email").value.trim(),
       listings: $("#o_listings").value, lastContact: $("#o_last").value, notes: $("#o_notes").value.trim(),
@@ -465,7 +496,7 @@ function ownerModal(owner) {
     if (editing) db.updateOwner(owner.id, data); else db.addOwner(data);
     closeModal(); render(); toast(t("toast.saved"));
   };
-  if (editing) $("[data-delete]").onclick = () => { db.removeOwner(owner.id); closeModal(); render(); toast(t("toast.deleted")); };
+  if (editing) ($("[data-delete]") || {}).onclick = () => { db.removeOwner(owner.id); closeModal(); render(); toast(t("toast.deleted")); };
   $$("[data-close]").forEach(b => b.onclick = closeModal);
 }
 
@@ -544,13 +575,90 @@ function buildNav() {
 }
 
 function render() {
-  const r = currentRoute();
-  const route = allRoutes()[r];
-  $("#pageTitle").textContent = t(route.title);
-  $("#pageSubtitle").textContent = t(route.sub);
-  $("#view").innerHTML = route.view();
-  $$("#nav .nav__item").forEach(a => a.classList.toggle("active", a.dataset.route === r));
-  if (route.mount) route.mount({ render, toast, t, db }); else bindViewEvents(r);
+  // Auth gate — must be signed in to use the app
+  if (!currentUser()) { renderAuthScreen(); return; }
+  document.body.classList.remove("authing");
+  renderUserChip();
+  try {
+    const r = currentRoute();
+    const route = allRoutes()[r];
+    $("#pageTitle").textContent = t(route.title);
+    $("#pageSubtitle").textContent = t(route.sub);
+    $("#view").innerHTML = route.view();
+    $$("#nav .nav__item").forEach(a => a.classList.toggle("active", a.dataset.route === r));
+    if (route.mount) route.mount({ render, toast, t, db }); else bindViewEvents(r);
+  } catch (err) {
+    // Never leave a blank/black screen — surface the error instead.
+    console.error(err);
+    $("#view").innerHTML = `<div class="card"><div class="empty"><div class="empty__icon">⚠️</div>
+      <h3>Something went wrong</h3><p class="muted">${esc(err && err.message || err)}</p></div></div>`;
+  }
+}
+
+/* ---------------- Auth screen (login / register) ---------------- */
+let authMode = null;
+function renderAuthScreen() {
+  document.body.classList.add("authing");
+  if (authMode === null) authMode = hasUsers() ? "login" : "register";
+  const reg = authMode === "register";
+  const first = !hasUsers();
+  $("#view").innerHTML = `
+    <div class="auth-wrap">
+      <div class="auth-card card">
+        <div class="auth-brand">
+          <div class="brand__logo"><img src="./assets/img/ajrly-key.svg" alt="Ajrly" /></div>
+          <div><div style="font-weight:800;font-size:18px">Ajrly <span style="color:var(--brand)">OS</span></div>
+          <div class="muted">${esc(t("auth.welcome"))}</div></div>
+        </div>
+        <div class="seg" style="width:100%;margin:6px 0 16px">
+          <button data-am="login" class="${reg ? "" : "active"}" style="flex:1">${esc(t("auth.login"))}</button>
+          <button data-am="register" class="${reg ? "active" : ""}" style="flex:1">${esc(t("auth.register"))}</button>
+        </div>
+        ${reg && first ? `<p class="muted" style="margin-bottom:10px">🛡️ ${esc(t("auth.firstNote"))}</p>` : ""}
+        ${reg ? `<div class="field"><label>${esc(t("auth.name"))}</label><input id="a_name" /></div>` : ""}
+        <div class="field"><label>${esc(t("auth.email"))}</label><input id="a_email" type="email" autocomplete="username" /></div>
+        <div class="field"><label>${esc(t("auth.password"))}</label><input id="a_pw" type="password" autocomplete="${reg ? "new-password" : "current-password"}" /></div>
+        <p id="a_err" style="color:var(--st-overdue);font-size:12.5px;min-height:16px;margin:4px 0"></p>
+        <button class="btn btn--primary" id="a_submit" style="width:100%">${esc(reg ? t("auth.register") : t("auth.login"))}</button>
+        <p class="muted" style="text-align:center;margin-top:12px;cursor:pointer" id="a_toggle">${esc(reg ? t("auth.haveAccount") : t("auth.noAccount"))}</p>
+      </div>
+    </div>`;
+
+  $$("[data-am]").forEach(b => b.onclick = () => { authMode = b.dataset.am; renderAuthScreen(); });
+  $("#a_toggle").onclick = () => { authMode = reg ? "login" : "register"; renderAuthScreen(); };
+  const submit = async () => {
+    const err = $("#a_err");
+    const email = $("#a_email").value, pw = $("#a_pw").value;
+    let res;
+    if (reg) res = await register({ name: $("#a_name").value, email, password: pw });
+    else res = await login(email, pw);
+    if (res.error) { err.textContent = t("auth.err." + res.error) || res.error; return; }
+    authMode = null;
+    toast(t("auth.signedIn"));
+    location.hash = "#/dashboard";
+    render();
+  };
+  $("#a_submit").onclick = submit;
+  ["a_email", "a_pw", "a_name"].forEach(id => { const el = $("#" + id); if (el) el.onkeydown = (e) => { if (e.key === "Enter") submit(); }; });
+}
+
+/* ---------------- Sidebar user chip ---------------- */
+function renderUserChip() {
+  const u = currentUser();
+  const foot = $(".sidebar__footer");
+  if (!u || !foot) return;
+  const initials = String(u.name || "?").trim().slice(0, 2).toUpperCase();
+  const roleLabel = t("role." + u.role);
+  foot.innerHTML = `
+    <a class="user-chip" href="#/account" style="text-decoration:none">
+      <div class="user-chip__avatar">${esc(initials)}</div>
+      <div class="user-chip__meta">
+        <span class="user-chip__name">${esc(u.name)}</span>
+        <span class="user-chip__role">${esc(roleLabel)}</span>
+      </div>
+    </a>
+    <button class="btn btn--sm" id="logoutBtn" style="width:100%;margin-top:8px">⎋ ${esc(t("auth.logout"))}</button>`;
+  $("#logoutBtn").onclick = () => { logout(); authMode = null; render(); };
 }
 
 function bindViewEvents(r) {
@@ -631,11 +739,17 @@ function initChrome() {
 
 /* Expose a tiny API for feature modules (charts, exports, etc.).
    Must be set BEFORE the first render so module views can read it. */
-window.AjrlyOS = { db, t, getLang, render, toast, openModal, closeModal, esc, fmtDate, PILLARS, GOALS, TEAM, OWNER_STAGES };
+window.AjrlyOS = { db, t, getLang, render, toast, openModal, closeModal, esc, fmtDate, PILLARS, GOALS, TEAM, OWNER_STAGES, can, currentUser, team };
 
-/* Boot */
+/* Boot — wrapped so a failure shows an error instead of a black screen */
 window.addEventListener("hashchange", render);
-initChrome();
-buildNav();
-applyLang();
-render();
+try {
+  initChrome();
+  buildNav();
+  applyLang();
+  render();
+} catch (err) {
+  console.error("Boot failed:", err);
+  const v = document.getElementById("view");
+  if (v) v.innerHTML = `<div style="padding:40px;text-align:center;color:#ef4444">⚠️ ${String(err && err.message || err)}</div>`;
+}
