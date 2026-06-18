@@ -36,7 +36,7 @@ For a manual / one-off deploy from your machine (no Git connection required):
 
 ```bash
 # From the repo root:
-npx wrangler pages deploy . --project-name=ajrly-os
+npx wrangler pages deploy . --project-name=ajrly
 ```
 
 First run will prompt you to log in (`npx wrangler login`) and, if the project
@@ -79,11 +79,11 @@ to post the deployment status/preview URL back to the commit.
 
    | Type | Name | Target |
    | --- | --- | --- |
-   | CNAME | `os` | `ajrly-os.pages.dev` |
+   | CNAME | `os` | `ajrly.pages.dev` |
 
 4. Cloudflare provisions a TLS certificate automatically. Allow a few minutes.
 
-The default `*.pages.dev` URL (e.g. `https://ajrly-os.pages.dev`) keeps working
+The default `*.pages.dev` URL (e.g. `https://ajrly.pages.dev`) keeps working
 alongside the custom domain.
 
 ---

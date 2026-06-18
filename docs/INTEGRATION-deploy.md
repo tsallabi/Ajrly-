@@ -8,7 +8,7 @@ coordinator must wire up. Full step-by-step lives in
 
 | File | Purpose |
 | --- | --- |
-| `wrangler.toml` | Cloudflare Pages project config (`name="ajrly-os"`, output dir `.`). |
+| `wrangler.toml` | Cloudflare Pages project config (`name="ajrly"`, output dir `.`). |
 | `_headers` | Edge security headers + CSP; long immutable cache for `/assets/*`. |
 | `_redirects` | SPA fallback `/*  /index.html  200`. |
 | `.gitignore` | Ignores `node_modules`, `.env*`, `.wrangler`, `dist`, logs. |
@@ -20,15 +20,15 @@ These do **not** touch `index.html`, `assets/`, `functions/`, `README.md`,
 
 ## What the coordinator must do
 
-1. **Create the Cloudflare Pages project** named `ajrly-os` via either the
-   Dashboard Git-connect flow or `npx wrangler pages deploy . --project-name=ajrly-os`.
+1. **Create the Cloudflare Pages project** named `ajrly` via either the
+   Dashboard Git-connect flow or `npx wrangler pages deploy . --project-name=ajrly`.
 2. **Add CI secrets** in GitHub (only needed for the Actions flow):
    - `CLOUDFLARE_API_TOKEN`
    - `CLOUDFLARE_ACCOUNT_ID`
 3. **Add Function env vars/secrets** in the Pages project settings if/when the
    `/functions` track ships Supabase-backed endpoints (e.g. `SUPABASE_URL`,
    `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`).
-4. **(Optional) Custom domain** `os.ajrly.ly` — CNAME → `ajrly-os.pages.dev`.
+4. **(Optional) Custom domain** `os.ajrly.ly` — CNAME → `ajrly.pages.dev`.
 
 ## Test locally
 
