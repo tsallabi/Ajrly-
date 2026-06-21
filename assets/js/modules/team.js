@@ -103,6 +103,8 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 let viewingUserId = null;   // user whose extended timeline is open
 let timelineCache = {};     // userId -> rows
 let unsub = null;           // presence subscription cleanup
+let presenceSubscribed = false; // subscribe to presence only once (avoids render recursion)
+let rerenderTimer = null;
 
 /* The roster of users to show. In cloud mode WS-A mirrors /api/users
    into a cache; we look in a few likely places, then fall back to the
@@ -309,10 +311,18 @@ function mount(ctx) {
   const reRender = () => (ctx && ctx.render ? ctx.render() : (OS().render && OS().render()));
   const $$ = (s) => [...document.querySelectorAll(s)];
 
-  // live updates: re-render the page when presence changes (subscribe once-per-mount)
-  if (typeof unsub === "function") { unsub(); unsub = null; }
+  // Live updates: subscribe to presence ONCE (onPresence fires immediately and
+  // mount runs on every render, so re-subscribing here would recurse infinitely
+  // → "Maximum call stack size exceeded"). Debounce + only re-render on #/team.
   const pres = P();
-  if (pres) unsub = pres.onPresence(() => { reRender(); });
+  if (pres && !presenceSubscribed) {
+    presenceSubscribed = true;
+    pres.onPresence(() => {
+      if ((location.hash.replace("#/", "") || "") !== "team") return;
+      clearTimeout(rerenderTimer);
+      rerenderTimer = setTimeout(() => { try { (OS().render || (() => {}))(); } catch (_) {} }, 250);
+    });
+  }
 
   // admin: escalate / de-escalate monitor level
   $$("[data-mon]").forEach(btn => {
