@@ -54,8 +54,8 @@ export const OWNER_STAGES = ["recruitment", "communication", "content", "active"
 
 /* Ajrly platform links (from the original sheet) */
 export const LINKS = [
-  { label: "Web App", url: "https://app.ajrly.ly/login", icon: "🖥️" },
-  { label: "Website", url: "https://ajrly.ly", icon: "🌐" },
+  { label: "Web App", url: "https://app.ajr.ly", icon: "🖥️" },
+  { label: "Website", url: "https://ajr.ly", icon: "🌐" },
   { label: "Google Play", url: "https://play.google.com/store/apps/details?id=com.ajrly.app", icon: "🤖" },
   { label: "App Store", url: "https://apps.apple.com/us/app/ajrly", icon: "🍎" },
   { label: "YouTube", url: "https://www.youtube.com/@theajrlyapp", icon: "▶️" },
