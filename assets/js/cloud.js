@@ -121,6 +121,7 @@ export async function pull() {
     tasks: data.tasks || [],
     content: data.content || [],
     owners: data.owners || [],
+    finance: data.finance || [],
     users: data.users || [],
     ts: data.ts || Date.now(),
   };
@@ -143,6 +144,7 @@ function makeCrud(resource) {
 const _tasks = makeCrud("tasks");
 const _content = makeCrud("content");
 const _owners = makeCrud("owners");
+const _finance = makeCrud("finance");
 
 /* Tasks */
 export const createTask = (p) => _tasks.create(p);
@@ -156,6 +158,10 @@ export const removeContent = (id) => _content.remove(id);
 export const createOwner = (p) => _owners.create(p);
 export const updateOwner = (id, p) => _owners.update(id, p);
 export const removeOwner = (id) => _owners.remove(id);
+/* Finance */
+export const createFinance = (p) => _finance.create(p);
+export const updateFinance = (id, p) => _finance.update(id, p);
+export const removeFinance = (id) => _finance.remove(id);
 
 /* Clean default export for ergonomic importing. */
 const cloud = {
@@ -167,5 +173,6 @@ const cloud = {
   createTask, updateTask, removeTask,
   createContent, updateContent, removeContent,
   createOwner, updateOwner, removeOwner,
+  createFinance, updateFinance, removeFinance,
 };
 export default cloud;

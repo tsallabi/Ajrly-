@@ -28,7 +28,7 @@ function replaceInPlace(arr, next) {
 function persistSnapshot(db) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
-      tasks: db.tasks, content: db.content, owners: db.owners,
+      tasks: db.tasks, content: db.content, owners: db.owners, finance: db.finance,
     }));
   } catch (_) { /* ignore quota/availability */ }
 }
@@ -42,6 +42,7 @@ export async function hydrateFromCloud(db) {
   replaceInPlace(db.tasks, data.tasks);
   replaceInPlace(db.content, data.content);
   replaceInPlace(db.owners, data.owners);
+  replaceInPlace(db.finance, data.finance || []);
   persistSnapshot(db);
   return data;
 }
@@ -101,6 +102,15 @@ export function wireWriteThrough(db, onError) {
     cloud.updateOwner(id, patch).then((row) => mergeServerRow(db.owners, id, row)).catch(report);
   });
   wrap("removeOwner", (id) => { cloud.removeOwner(id).catch(report); });
+
+  wrap("addFinance", (f) => {
+    const local = newest(db.finance);
+    cloud.createFinance(f).then((row) => mergeServerRow(db.finance, local && local.id, row)).catch(report);
+  });
+  wrap("updateFinance", (id, patch) => {
+    cloud.updateFinance(id, patch).then((row) => mergeServerRow(db.finance, id, row)).catch(report);
+  });
+  wrap("removeFinance", (id) => { cloud.removeFinance(id).catch(report); });
 
   try { Object.defineProperty(db, "__cloudWired", { value: true, enumerable: false }); } catch (_) {}
   return true;

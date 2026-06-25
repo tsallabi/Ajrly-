@@ -29,6 +29,9 @@ const seedContent = [
 /* ---- Seed: Property owners CRM (schema ready, starts empty per sheet) ---- */
 const seedOwners = [];
 
+/* ---- Seed: Finance (expenses + income), starts empty ---- */
+const seedFinance = [];
+
 /* ---- Static reference: Content pillars (from Pillar matrix) ---- */
 export const PILLARS = [
   { name: "Property Discovery", sub: "Core Product", icon: "🔍", purpose: "Help renters discover properties and inspire bookings." },
@@ -62,14 +65,14 @@ export const LINKS = [
 ];
 
 /* ---- Store ---- */
-const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners });
+const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance });
 
 let state = load();
 
 function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return { ...defaultState(), ...JSON.parse(raw) }; // merge so new keys (e.g. finance) default
   } catch (e) { /* ignore */ }
   return defaultState();
 }
@@ -97,6 +100,11 @@ export const db = {
   addOwner(o) { state.owners.push({ ...o, id: uid("o") }); persist(); },
   updateOwner(id, patch) { state.owners = state.owners.map(o => o.id === id ? { ...o, ...patch } : o); persist(); },
   removeOwner(id) { state.owners = state.owners.filter(o => o.id !== id); persist(); },
+
+  get finance() { return state.finance; },
+  addFinance(f) { state.finance.unshift({ ...f, id: uid("f") }); persist(); },
+  updateFinance(id, patch) { state.finance = state.finance.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
+  removeFinance(id) { state.finance = state.finance.filter(x => x.id !== id); persist(); },
 
   reset() { state = defaultState(); persist(); },
   exportJSON() { return JSON.stringify(state, null, 2); },

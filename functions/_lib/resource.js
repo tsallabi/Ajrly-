@@ -119,6 +119,23 @@ export const TASKS = {
   ],
 };
 
+export const FINANCE = {
+  table: "finance",
+  prefix: "f",
+  order: "date DESC, created_at DESC",
+  fields: [
+    { col: "kind", key: "kind" },
+    { col: "name", key: "name" },
+    { col: "date", key: "date" },
+    { col: "amount", key: "amount" },
+    { col: "currency", key: "currency" },
+    { col: "category", key: "category" },
+    { col: "description", key: "description" },
+    { col: "attachment", key: "attachment" },
+    { col: "attachment_name", key: "attachmentName" },
+  ],
+};
+
 export const CONTENT = {
   table: "content",
   prefix: "c",
