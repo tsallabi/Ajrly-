@@ -71,6 +71,7 @@ registerStrings({
     "timer.running": "قيد التشغيل", "timer.tracked": "الوقت المسجّل",
     "timer.locked": "اكتملت المهمة — لا يمكن إضافة وقت",
     "pf.m.hours": "ساعات العمل (هذا الأسبوع)",
+    "field.repeat": "التكرار", "repeat.none": "بدون تكرار", "repeat.daily": "يومياً",
   },
   en: {
     "tab.all": "All", "empty.tasks": "No tasks in this tab",
@@ -78,6 +79,7 @@ registerStrings({
     "timer.running": "running", "timer.tracked": "Tracked time",
     "timer.locked": "Task is complete — no time can be added",
     "pf.m.hours": "Work hours (this week)",
+    "field.repeat": "Repeat", "repeat.none": "No repeat", "repeat.daily": "Daily",
   },
 });
 
@@ -318,6 +320,37 @@ function applyTaskStatus(id, status) {
   if (status === "complete" || status === "closed") Object.assign(patch, finalizeTimer(x));
   db.updateTask(id, patch);
 }
+/* Daily recurring tasks: ensure today's instance exists for each series.
+   Yesterday's open instance becomes overdue (Late) but stays open; a fresh
+   task for today is added on top. Deduped by series so multiple devices/users
+   (after sync) don't create duplicates. Returns true if anything changed. */
+function rollRecurringTasks() {
+  const today = todayISO();
+  const daily = db.tasks.filter(t => t.repeat === "daily");
+  if (!daily.length) return false;
+  const bySeries = {};
+  daily.forEach(t => { const k = t.seriesId || t.id; (bySeries[k] = bySeries[k] || []).push(t); });
+  let changed = false;
+  Object.values(bySeries).forEach(list => {
+    list.sort((a, b) => String(b.dueDate || b.date || "").localeCompare(String(a.dueDate || a.date || "")));
+    const latest = list[0];
+    const latestDay = latest.dueDate || latest.date || "";
+    if (!latestDay || latestDay >= today) return;       // today's instance already exists
+    if (latest.status !== "complete" && latest.status !== "closed") {
+      db.updateTask(latest.id, { status: "overdue" });  // missed → Late, still open
+    }
+    db.addTask({
+      title: latest.title, description: latest.description, priority: latest.priority,
+      assignedBy: latest.assignedBy, delegateTo: latest.delegateTo,
+      ownerId: latest.ownerId, ownerName: latest.ownerName, contactMethod: latest.contactMethod,
+      repeat: "daily", seriesId: latest.seriesId || latest.id,
+      dueDate: today, date: today, status: "pending",
+    });
+    changed = true;
+  });
+  return changed;
+}
+
 function stopTimerTicker() { if (timerTick) { clearInterval(timerTick); timerTick = null; } }
 function startTimerTicker() {
   stopTimerTicker();
@@ -377,7 +410,7 @@ function tasksTable(list) {
       ? `<span title="${t("timer.locked")}">🔒</span>`
       : `<button class="btn btn--ghost btn--sm" data-timer="${x.id}" title="${running ? t("timer.stop") : t("timer.start")}">${running ? "⏸" : "▶"}</button>`;
     return `<tr>
-      <td><div class="cell-title">${esc(x.title)}</div><div class="muted">${x.ownerName ? "🏠 " + esc(x.ownerName) + " · " : ""}${esc(x.description || "")}</div></td>
+      <td><div class="cell-title">${x.repeat === "daily" ? `<span title="${t("repeat.daily")}">🔁 </span>` : ""}${esc(x.title)}</div><div class="muted">${x.ownerName ? "🏠 " + esc(x.ownerName) + " · " : ""}${esc(x.description || "")}</div></td>
       <td>${priChip(x.priority)}</td>
       <td>${who ? `<span class="flex" style="gap:7px"><span class="avatar-sm">${initials(who)}</span>${esc(who)}</span>` : "—"}</td>
       <td>${fmtDate(x.dueDate)}</td>
@@ -420,6 +453,7 @@ function taskModal(task, prefill) {
         <div class="field"><label>${t("field.dueDate")}</label><input type="date" id="f_due" value="${esc(x.dueDate || "")}" /></div>
         <div class="field"><label>${t("field.duration")}</label><input id="f_dur" placeholder="00:30" value="${esc(x.duration || "")}" /></div>
       </div>
+      <div class="field"><label>🔁 ${t("field.repeat")}</label><select id="f_repeat">${["none","daily"].map(r => opt(r, (x.repeat || "none"), t("repeat." + r))).join("")}</select></div>
       ${editing ? `<div class="field"><label>⏱️ ${t("timer.tracked")}</label><input value="${fmtDur(taskTotalSeconds(x))}${taskRunning(x) ? " · " + t("timer.running") : ""}" disabled /></div>` : ""}
       <div class="field-row">
         <div class="field"><label>${t("task.owner")}</label><select id="f_owner" ${lockOwner ? "disabled" : ""}>
@@ -447,8 +481,14 @@ function taskModal(task, prefill) {
       assignedBy: $("#f_by").value, delegateTo: $("#f_del").value,
       dueDate: $("#f_due").value, duration: $("#f_dur").value,
       ownerId: oid, ownerName: own ? own.name : (x.ownerName || ""), contactMethod: $("#f_contact").value,
+      repeat: $("#f_repeat").value,
     };
     if (!data.title) { $("#f_title").focus(); return; }
+    // recurring daily tasks: tag a series + default the due date to today
+    if (data.repeat === "daily") {
+      data.seriesId = (editing && task.seriesId) ? task.seriesId : ("ser" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+      if (!data.dueDate) data.dueDate = todayISO();
+    }
     // finalize a running timer when the task is being completed/closed
     if (editing && (data.status === "complete" || data.status === "closed")) Object.assign(data, finalizeTimer(task));
     if (editing) db.updateTask(task.id, data); else db.addTask(data);
@@ -1185,6 +1225,8 @@ async function boot() {
       } catch (_) { cloudUser = null; }
     }
   } catch (_) { cloudReady = false; }
+  // roll daily recurring tasks forward once data is ready (local + cloud)
+  try { if (activeUser()) rollRecurringTasks(); } catch (_) {}
   render();
 }
 try {
