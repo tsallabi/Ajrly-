@@ -53,17 +53,32 @@ export async function getResource(env, cfg, id) {
   return toClient(cfg, row);
 }
 
+/* Columns that actually exist in a table, so we never INSERT/UPDATE a
+   column a not-yet-migrated DB is missing (which would throw and cause
+   data loss on the client). Table names come from our own cfg, not user
+   input. Returns a Set, or null if it can't be determined (then we
+   include all configured columns as before). */
+async function existingCols(env, table) {
+  try {
+    const rows = await all(env, `PRAGMA table_info(${table})`);
+    const s = new Set(rows.map((r) => r.name));
+    return s.size ? s : null;
+  } catch (_) { return null; }
+}
+
 export async function createResource(env, cfg, body) {
   const id = uid(cfg.prefix);
+  const have = await existingCols(env, cfg.table);
   const cols = ["id"];
   const placeholders = ["?"];
   const binds = [id];
   for (const f of cfg.fields) {
+    if (have && !have.has(f.col)) continue; // skip columns the DB doesn't have yet
     cols.push(f.col);
     placeholders.push("?");
     binds.push(dbValue(f, body));
   }
-  cols.push("updated_at"); placeholders.push("?"); binds.push(now());
+  if (!have || have.has("updated_at")) { cols.push("updated_at"); placeholders.push("?"); binds.push(now()); }
   await run(env,
     `INSERT INTO ${cfg.table} (${cols.join(", ")}) VALUES (${placeholders.join(", ")})`,
     ...binds
@@ -74,14 +89,16 @@ export async function createResource(env, cfg, body) {
 export async function updateResource(env, cfg, id, body) {
   const existing = await first(env, `SELECT id FROM ${cfg.table} WHERE id = ?`, id);
   if (!existing) return null;
+  const have = await existingCols(env, cfg.table);
   const sets = [];
   const binds = [];
   for (const f of cfg.fields) {
     if (body[f.key] === undefined) continue;
+    if (have && !have.has(f.col)) continue; // skip columns the DB doesn't have yet
     sets.push(`${f.col} = ?`);
     binds.push(dbValue(f, body));
   }
-  sets.push("updated_at = ?"); binds.push(now());
+  if (!have || have.has("updated_at")) { sets.push("updated_at = ?"); binds.push(now()); }
   binds.push(id);
   await run(env, `UPDATE ${cfg.table} SET ${sets.join(", ")} WHERE id = ?`, ...binds);
   return getResource(env, cfg, id);
