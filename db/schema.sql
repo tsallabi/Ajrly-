@@ -61,11 +61,14 @@ CREATE TABLE IF NOT EXISTS content (
 CREATE TABLE IF NOT EXISTS owners (
   id           TEXT PRIMARY KEY,
   name         TEXT,
+  gender       TEXT,                                 -- male|female
   phone        TEXT,
   email        TEXT,
+  city         TEXT,
   listings     TEXT,
+  signed_up    TEXT,                                 -- date the owner signed up
   last_contact TEXT,
-  stage        TEXT DEFAULT 'recruitment',           -- recruitment|communication|content|active
+  stage        TEXT DEFAULT 'potential',             -- registered|contacted|pending|potential
   notes        TEXT,
   status       TEXT,
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),

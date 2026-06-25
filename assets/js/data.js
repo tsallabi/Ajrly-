@@ -48,9 +48,9 @@ export const GOALS = ["Community Building", "Education & Value", "Property Disco
 export const TEAM = ["Asel", "Kenda", "Raneem", "Tarek"];
 export const STATUSES = ["pending", "progress", "complete", "overdue", "closed"];
 
-/* Owner pipeline stages — maps the sheet's owner tabs:
-   Recruitment → Communication → Content → Active */
-export const OWNER_STAGES = ["recruitment", "communication", "content", "active"];
+/* Owner pipeline tabs:
+   Registered ← Contacted ← Pending contact ← Potential (lead funnel) */
+export const OWNER_STAGES = ["registered", "contacted", "pending", "potential"];
 
 /* Ajrly platform links (from the original sheet) */
 export const LINKS = [
