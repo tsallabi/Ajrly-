@@ -33,5 +33,5 @@ class_name = "PresenceRoom"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["PresenceRoom"]
+new_sqlite_classes = ["PresenceRoom"]
 
