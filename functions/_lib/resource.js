@@ -147,6 +147,8 @@ export const OWNERS = {
     { col: "signed_up", key: "signedUp" },
     { col: "last_contact", key: "lastContact" },
     { col: "stage", key: "stage" },
+    { col: "priority", key: "priority" },
+    { col: "contact_log", key: "contactLog", json: true },
     { col: "notes", key: "notes" },
     { col: "status", key: "status" },
   ],
