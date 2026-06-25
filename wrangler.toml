@@ -26,12 +26,12 @@ id = "685734c205d14d5e98ccc476d3f90115"
 [vars]
 SESSION_SECRET = "1a3ad50e15e9241c137411d0f3c9f7c9a1eff4ea32af4cd4d5dfa42a8fd6676f"
 
-# --- Phase 2: real-time presence & live chat (enable after core is verified) ---
-# [[durable_objects.bindings]]
-# name = "PRESENCE"
-# class_name = "PresenceRoom"
-#
-# [[migrations]]
-# tag = "v1"
-# new_classes = ["PresenceRoom"]
+# --- Phase 2: real-time presence & live chat (enabled) ---
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["PresenceRoom"]
 
