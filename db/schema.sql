@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS owners (
   listings     TEXT,
   signed_up    TEXT,                                 -- date the owner signed up
   last_contact TEXT,
+  social       TEXT,                                 -- social media profile link / handle
   stage        TEXT DEFAULT 'registered',            -- registered|potential (contacted/pending are derived from last_contact)
   priority     INTEGER DEFAULT 0,
   community    INTEGER DEFAULT 0,                     -- community member flag
