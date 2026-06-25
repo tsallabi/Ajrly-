@@ -7,10 +7,8 @@ import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 import "./modules/analytics.js";
-import "./modules/integrations.js";
 import "./modules/account.js";
 import "./modules/team.js";
-import "./modules/support.js";
 import "./modules/performance.js";
 import cloud from "./cloud.js";
 import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js";
@@ -169,9 +167,6 @@ function viewDashboard() {
   const members = team().map(m => ({ m, n: tasks.filter(x => x.assignedBy === m || x.delegateTo === m).length }));
   const maxMem = Math.max(1, ...members.map(x => x.n));
 
-  const pillarMix = PILLARS.map(p => ({ p: p.name, n: db.content.filter(c => c.pillar === p.name).length })).filter(x => x.n > 0);
-  const maxPil = Math.max(1, ...pillarMix.map(x => x.n));
-
   const upcoming = [...tasks].filter(x => x.status !== "complete" && x.status !== "closed")
     .sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999")).slice(0, 5);
 
@@ -212,7 +207,7 @@ function viewDashboard() {
     </div>
   </div>
 
-  <div class="grid cards-2" style="margin-top:16px">
+  <div style="margin-top:16px">
     <div class="card">
       <div class="card__head"><span class="card__title">${t("card.upcoming")}</span><a class="btn btn--ghost btn--sm" href="#/tasks">→</a></div>
       <div class="mini-list">
@@ -228,18 +223,6 @@ function viewDashboard() {
             ${statusBadge(x.status)}
           </div>`;
         }).join("") : `<div class="empty"><div class="empty__icon">🎉</div></div>`}
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card__head"><span class="card__title">${t("card.pillarsMix")}</span><a class="btn btn--ghost btn--sm" href="#/content">→</a></div>
-      <div class="barlist">
-        ${pillarMix.length ? pillarMix.map(x => `
-          <div class="barlist__row" style="grid-template-columns:160px 1fr 36px">
-            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.p)}</span>
-            <div class="barlist__track"><div class="barlist__fill" style="width:${(x.n / maxPil) * 100}%;background:var(--accent)"></div></div>
-            <span class="barlist__val">${x.n}</span>
-          </div>`).join("") : `<div class="empty muted">—</div>`}
       </div>
     </div>
   </div>`;
@@ -879,9 +862,7 @@ function viewStrategy() {
 const coreRoutes = {
   dashboard: { view: viewDashboard, title: "page.dashboard", sub: "page.dashboard.sub", icon: "📊", labelKey: "nav.dashboard", order: 10 },
   tasks: { view: viewTasks, title: "page.tasks", sub: "page.tasks.sub", icon: "✅", labelKey: "nav.tasks", order: 20 },
-  content: { view: viewContent, title: "page.content", sub: "page.content.sub", icon: "📅", labelKey: "nav.content", order: 30 },
   owners: { view: viewOwners, title: "page.owners", sub: "page.owners.sub", icon: "🏠", labelKey: "nav.owners", order: 40 },
-  strategy: { view: viewStrategy, title: "page.strategy", sub: "page.strategy.sub", icon: "🎯", labelKey: "nav.strategy", order: 90 },
 };
 
 function allRoutes() {
