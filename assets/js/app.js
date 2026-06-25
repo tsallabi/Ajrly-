@@ -87,6 +87,9 @@ registerStrings({
     "owner.community": "عضو مجتمع", "owner.community.add": "تعيين كعضو مجتمع", "owner.community.remove": "إزالة من المجتمع",
     "task.owner": "المالك المرتبط", "task.contact": "وسيلة التواصل المفضّلة",
     "contact.whatsapp": "واتساب", "contact.phone": "اتصال", "contact.email": "بريد",
+    "owner.toPotential": "تحويل إلى محتمل", "owner.toRegistered": "تحويل إلى مسجّل", "owner.converted": "تم التحويل",
+    "owner.regLink": "رابط نموذج التسجيل", "owner.regLinkHint": "رابط نموذج تسجيل الملاك الذي تشاركه على وسائل التواصل (يُحفظ على هذا الجهاز).",
+    "owner.copy": "نسخ", "owner.open": "فتح", "owner.copied": "تم النسخ",
   },
   en: {
     "stage.registered": "Registered", "stage.contacted": "Contacted",
@@ -109,6 +112,9 @@ registerStrings({
     "owner.community": "Community member", "owner.community.add": "Make community member", "owner.community.remove": "Remove from community",
     "task.owner": "Related owner", "task.contact": "Preferred contact",
     "contact.whatsapp": "WhatsApp", "contact.phone": "Call", "contact.email": "Email",
+    "owner.toPotential": "Convert to potential", "owner.toRegistered": "Convert to registered", "owner.converted": "Converted",
+    "owner.regLink": "Registration form link", "owner.regLinkHint": "The owner registration form link you share on social media (saved on this device).",
+    "owner.copy": "Copy", "owner.open": "Open", "owner.copied": "Copied",
   },
 });
 
@@ -546,7 +552,8 @@ function viewOwners() {
   </div>`;
   const rightActions = ownerTab === "tasks"
     ? (W() ? `<button class="btn btn--primary" id="addOwnerTask">＋ ${t("owner.createTask")}</button>` : "")
-    : `<button class="btn btn--sm" id="ownerTpl" title="${t("owner.tpl")}">⬇ ${t("owner.tpl")}</button>
+    : `<button class="btn btn--sm" id="ownerRegLink">🔗 ${t("owner.regLink")}</button>
+       <button class="btn btn--sm" id="ownerTpl" title="${t("owner.tpl")}">⬇ ${t("owner.tpl")}</button>
        <button class="btn btn--sm" id="ownerXlsx">⬆ ${t("owner.bulk")}</button>
        ${W() ? `<button class="btn btn--primary" id="addOwner">＋ ${t("btn.newOwner")}</button>` : ""}
        <input type="file" id="ownerFile" accept=".csv,.xlsx,.xls" hidden />`;
@@ -578,6 +585,7 @@ function viewOwners() {
       <td>${o.lastContact ? fmtDate(o.lastContact) : "—"}</td><td>${dueTxt}</td>
       <td style="text-align:center"><input type="checkbox" class="owner-contacted" data-ocontact="${o.id}" ${checked} title="${t("owner.markContacted")}" style="width:18px;height:18px;cursor:pointer" /></td>
       <td><div class="row-actions">
+        ${W() ? `<button class="btn btn--ghost btn--sm" data-oconv="${o.id}" title="${ownerType(o) === "potential" ? t("owner.toRegistered") : t("owner.toPotential")}">${ownerType(o) === "potential" ? "⬆️" : "⬇️"}</button>` : ""}
         ${W() ? `<button class="btn btn--ghost btn--sm" data-otask="${o.id}" title="${t("owner.createTask")}">＋🛠️</button>` : ""}
         <button class="btn btn--ghost btn--sm" data-oedit="${o.id}">✎</button>
         ${D() ? `<button class="btn btn--ghost btn--sm btn--danger" data-odel="${o.id}">🗑</button>` : ""}
@@ -636,6 +644,7 @@ function ownerProfile(owner) {
         ${o.email ? `<a class="btn btn--sm" href="mailto:${esc(o.email)}">✉️ ${t("intg.due.email")}</a>` : ""}
         <button class="btn btn--sm" data-ostar2="${o.id}">${o.priority ? "⭐ " + t("owner.unprioritize") : "☆ " + t("owner.prioritize")}</button>
         <button class="btn btn--sm" data-ocomm="${o.id}">${o.community ? "👥 " + t("owner.community.remove") : "👥 " + t("owner.community.add")}</button>
+        ${W() ? `<button class="btn btn--sm" data-oconv2="${o.id}">${ownerType(o) === "potential" ? "⬆️ " + t("owner.toRegistered") : "⬇️ " + t("owner.toPotential")}</button>` : ""}
         ${W() ? `<button class="btn btn--sm" data-otask3="${o.id}">＋🛠️ ${t("owner.createTask")}</button>` : ""}
         ${W() ? `<button class="btn btn--sm" data-oedit2="${o.id}">✎ ${t("btn.edit")}</button>` : ""}
       </div>
@@ -662,6 +671,34 @@ function ownerProfile(owner) {
   ($("[data-ostar2]") || {}).onclick = () => { const c = cur(); db.updateOwner(c.id, { priority: !c.priority }); render(); ownerProfile(db.owners.find(x => x.id === o.id)); };
   ($("[data-ocomm]") || {}).onclick = () => { const c = cur(); db.updateOwner(c.id, { community: !c.community }); render(); ownerProfile(db.owners.find(x => x.id === o.id)); };
   ($("[data-otask3]") || {}).onclick = () => { const c = cur(); ownerCreateTask(c); };
+  ($("[data-oconv2]") || {}).onclick = () => { const c = cur(); db.updateOwner(c.id, { stage: ownerType(c) === "potential" ? "registered" : "potential" }); render(); toast(t("owner.converted")); ownerProfile(db.owners.find(x => x.id === o.id)); };
+  $$("[data-close]").forEach(b => b.onclick = closeModal);
+}
+
+/* Owner registration form link (shared on social media) — saved locally */
+const REG_LINK_KEY = "ajrly_owner_reg_url";
+function ownerRegLinkModal() {
+  let url = "";
+  try { url = localStorage.getItem(REG_LINK_KEY) || ""; } catch (e) {}
+  openModal(`
+    <div class="modal__head"><h3>🔗 ${t("owner.regLink")}</h3><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal__body">
+      <p class="muted">${t("owner.regLinkHint")}</p>
+      <div class="field"><label>${t("owner.regLink")}</label><input id="reg_url" placeholder="https://app.ajr.ly/register" value="${esc(url)}" /></div>
+      <div class="flex" style="gap:8px;flex-wrap:wrap">
+        ${url ? `<a class="btn btn--sm" href="${esc(url)}" target="_blank" rel="noopener">↗ ${t("owner.open")}</a>` : ""}
+        ${url ? `<button class="btn btn--sm" id="reg_copy">📋 ${t("owner.copy")}</button>` : ""}
+      </div>
+    </div>
+    <div class="modal__foot">
+      <button class="btn" data-close>${t("btn.cancel")}</button>
+      <button class="btn btn--primary" data-save>${t("btn.save")}</button>
+    </div>`);
+  ($("#reg_copy") || {}).onclick = () => { try { navigator.clipboard.writeText(url); toast(t("owner.copied")); } catch (e) {} };
+  ($("[data-save]") || {}).onclick = () => {
+    try { localStorage.setItem(REG_LINK_KEY, $("#reg_url").value.trim()); } catch (e) {}
+    closeModal(); toast(t("toast.saved"));
+  };
   $$("[data-close]").forEach(b => b.onclick = closeModal);
 }
 
@@ -1017,6 +1054,8 @@ function bindViewEvents(r) {
     $$("[data-oprofile]").forEach(b => b.onclick = (e) => { e.preventDefault(); ownerProfile(db.owners.find(x => x.id === b.dataset.oprofile)); });
     $$("[data-ostar]").forEach(b => b.onclick = () => { const o = db.owners.find(x => x.id === b.dataset.ostar); db.updateOwner(o.id, { priority: !o.priority }); render(); });
     $$("[data-ocontact]").forEach(b => b.onclick = (e) => { e.preventDefault(); logContactModal(db.owners.find(x => x.id === b.dataset.ocontact)); });
+    $$("[data-oconv]").forEach(b => b.onclick = () => { const o = db.owners.find(x => x.id === b.dataset.oconv); db.updateOwner(o.id, { stage: ownerType(o) === "potential" ? "registered" : "potential" }); render(); toast(t("owner.converted")); });
+    $("#ownerRegLink") && ($("#ownerRegLink").onclick = ownerRegLinkModal);
     $("#ownerTpl") && ($("#ownerTpl").onclick = downloadOwnerTemplate);
     $("#ownerXlsx") && ($("#ownerXlsx").onclick = () => $("#ownerFile") && $("#ownerFile").click());
     $("#ownerFile") && ($("#ownerFile").onchange = (e) => { const f = e.target.files[0]; if (f) ownerBulkAdd(f); e.target.value = ""; });
