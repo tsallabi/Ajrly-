@@ -63,12 +63,22 @@ export function wireWriteThrough(db, onError) {
   if (db.__cloudWired) return true;
 
   const report = (e) => { try { onError && onError(e); } catch (_) {} };
+  const rerender = () => { try { if (window.AjrlyOS && window.AjrlyOS.render) window.AjrlyOS.render(); } catch (_) {} };
   const findById = (arr, id) => arr.find((x) => x && x.id === id);
   const mergeServerRow = (arr, localId, row) => {
     if (!row) return;
     const it = findById(arr, localId);
-    if (it) Object.assign(it, row);
-    persistSnapshot(db);
+    if (it) {
+      // when the server assigns a new id (after a create), the rendered DOM
+      // still references the temporary local id — re-render so edit/delete/
+      // timer buttons point at the authoritative id.
+      const idChanged = row.id && row.id !== it.id;
+      Object.assign(it, row);
+      persistSnapshot(db);
+      if (idChanged) rerender();
+    } else {
+      persistSnapshot(db);
+    }
   };
 
   const wrap = (name, fn) => {
