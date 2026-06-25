@@ -68,7 +68,9 @@ CREATE TABLE IF NOT EXISTS owners (
   listings     TEXT,
   signed_up    TEXT,                                 -- date the owner signed up
   last_contact TEXT,
-  stage        TEXT DEFAULT 'potential',             -- registered|contacted|pending|potential
+  stage        TEXT DEFAULT 'registered',            -- registered|potential (contacted/pending are derived from last_contact)
+  priority     INTEGER DEFAULT 0,
+  contact_log  TEXT,                                 -- JSON array of {date,summary,next,by}
   notes        TEXT,
   status       TEXT,
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
