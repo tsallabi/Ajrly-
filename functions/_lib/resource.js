@@ -19,6 +19,9 @@ export function toClient(cfg, row) {
   if (!row) return null;
   const out = { id: row.id };
   for (const f of cfg.fields) {
+    // Column not present in this table (e.g. not migrated yet): omit the key
+    // entirely so the client keeps its local value instead of having it wiped.
+    if (!(f.col in row)) continue;
     let v = row[f.col];
     if (f.json) {
       if (typeof v === "string") {
