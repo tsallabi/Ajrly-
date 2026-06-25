@@ -114,6 +114,8 @@ export const TASKS = {
     { col: "owner_id", key: "ownerId" },
     { col: "owner_name", key: "ownerName" },
     { col: "contact_method", key: "contactMethod" },
+    { col: "time_log", key: "timeLog", json: true },
+    { col: "timer_start", key: "timerStart" },
   ],
 };
 

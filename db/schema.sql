@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   owner_id    TEXT,                                  -- linked property owner (optional)
   owner_name  TEXT,
   contact_method TEXT,                               -- whatsapp|phone|email
+  time_log    TEXT,                                  -- JSON array of {start,end,seconds,by} work sessions
+  timer_start TEXT,                                  -- ISO timestamp while a timer is running (else empty)
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );

@@ -62,6 +62,24 @@ registerStrings({
   },
 });
 
+/* ---- Tasks: tabs + per-task work timer ---- */
+registerStrings({
+  ar: {
+    "tab.all": "الكل", "empty.tasks": "لا توجد مهام في هذا التبويب",
+    "timer.col": "وقت العمل", "timer.start": "بدء المؤقّت", "timer.stop": "إيقاف المؤقّت",
+    "timer.running": "قيد التشغيل", "timer.tracked": "الوقت المسجّل",
+    "timer.locked": "اكتملت المهمة — لا يمكن إضافة وقت",
+    "pf.m.hours": "ساعات العمل (هذا الأسبوع)",
+  },
+  en: {
+    "tab.all": "All", "empty.tasks": "No tasks in this tab",
+    "timer.col": "Work time", "timer.start": "Start timer", "timer.stop": "Stop timer",
+    "timer.running": "running", "timer.tracked": "Tracked time",
+    "timer.locked": "Task is complete — no time can be added",
+    "pf.m.hours": "Work hours (this week)",
+  },
+});
+
 /* ---- Property-owner tabs, fields & labels ---- */
 registerStrings({
   ar: {
@@ -241,8 +259,69 @@ function statCard(icon, color, value, label) {
 /* ============================================================
    VIEW: Tasks
    ============================================================ */
-let tasksMode = "board";
+const TASK_TABS = ["all", "pending", "progress", "complete", "overdue", "closed"];
+const TASK_TAB_ICON = { all: "📋", pending: "🕒", progress: "🔄", complete: "✅", overdue: "⚠️", closed: "🔒" };
+let taskTab = "all";
 let taskMember = "";
+let timerTick = null;
+
+/* ---- Per-task work timer (start/stop many times until complete) ---- */
+function taskSessions(x) {
+  const l = x.timeLog;
+  if (Array.isArray(l)) return l;
+  if (typeof l === "string" && l) { try { const p = JSON.parse(l); return Array.isArray(p) ? p : []; } catch (e) { return []; } }
+  return [];
+}
+const taskAccumSeconds = (x) => taskSessions(x).reduce((s, e) => s + (Number(e.seconds) || 0), 0);
+function taskLiveSeconds(x) {
+  if (!x.timerStart) return 0;
+  const st = new Date(x.timerStart).getTime();
+  if (isNaN(st)) return 0;
+  return Math.max(0, Math.floor((Date.now() - st) / 1000));
+}
+const taskTotalSeconds = (x) => taskAccumSeconds(x) + taskLiveSeconds(x);
+const taskRunning = (x) => !!x.timerStart;
+const taskLocked = (x) => x.status === "complete" || x.status === "closed";
+function fmtDur(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+/* close a running session into the log (no-op if not running) */
+function finalizeTimer(x) {
+  if (!x.timerStart) return {};
+  const sessions = taskSessions(x).slice();
+  sessions.push({ start: x.timerStart, end: new Date().toISOString(), seconds: taskLiveSeconds(x), by: (activeUser() && activeUser().name) || "" });
+  return { timeLog: sessions, timerStart: "" };
+}
+function toggleTaskTimer(id) {
+  const x = db.tasks.find(t => t.id === id);
+  if (!x) return;
+  if (taskLocked(x)) { toast(t("timer.locked")); return; }
+  if (x.timerStart) db.updateTask(id, finalizeTimer(x));
+  else db.updateTask(id, { timerStart: new Date().toISOString() });
+  render();
+}
+/* change status, finalizing a running timer when the task is completed/closed */
+function applyTaskStatus(id, status) {
+  const x = db.tasks.find(t => t.id === id);
+  if (!x) return;
+  const patch = { status };
+  if (status === "complete" || status === "closed") Object.assign(patch, finalizeTimer(x));
+  db.updateTask(id, patch);
+}
+function stopTimerTicker() { if (timerTick) { clearInterval(timerTick); timerTick = null; } }
+function startTimerTicker() {
+  stopTimerTicker();
+  if (!db.tasks.some(taskRunning)) return;
+  timerTick = setInterval(() => {
+    $$("[data-timerlive]").forEach(el => {
+      const x = db.tasks.find(t => t.id === el.dataset.timerlive);
+      if (x) el.textContent = fmtDur(taskTotalSeconds(x));
+    });
+  }, 1000);
+}
 
 function filterTasks() {
   let list = db.tasks;
@@ -255,69 +334,60 @@ function filterTasks() {
 }
 
 function viewTasks() {
-  const seg = `<div class="seg">
-    <button data-mode="board" class="${tasksMode === "board" ? "active" : ""}">${t("view.board")}</button>
-    <button data-mode="table" class="${tasksMode === "table" ? "active" : ""}">${t("view.table")}</button>
+  const base = filterTasks();
+  const counts = {};
+  TASK_TABS.forEach(tab => counts[tab] = tab === "all" ? base.length : base.filter(x => x.status === tab).length);
+  if (!TASK_TABS.includes(taskTab)) taskTab = "all";
+
+  const tabs = `<div class="seg" id="taskTabs">
+    ${TASK_TABS.map(s => `<button data-ttab="${s}" class="${taskTab === s ? "active" : ""}">${TASK_TAB_ICON[s]} ${esc(t(s === "all" ? "tab.all" : STATUS_KEYS[s]))} <span class="kcol__count">${counts[s]}</span></button>`).join("")}
   </div>`;
   const memberFilter = `<select class="input" id="memberFilter">
     <option value="">${t("filter.member")}</option>
     ${team().map(m => `<option value="${m}" ${taskMember === m ? "selected" : ""}>${m}</option>`).join("")}
   </select>`;
   const toolbar = `<div class="toolbar">
-    <div class="toolbar__left">${seg}${memberFilter}</div>
+    <div class="toolbar__left">${tabs}${memberFilter}</div>
     <div class="toolbar__right">
       ${W() ? `<button class="btn btn--primary" id="addTask">＋ ${t("btn.newTask")}</button>` : ""}
     </div>
   </div>`;
-  return toolbar + (tasksMode === "board" ? tasksBoard() : tasksTable());
+  const list = taskTab === "all" ? base : base.filter(x => x.status === taskTab);
+  return toolbar + tasksTable(list);
 }
 
-function tasksBoard() {
-  const cols = ["pending", "progress", "complete", "overdue", "closed"];
-  const list = filterTasks();
-  return `<div class="kanban">${cols.map(col => {
-    const items = list.filter(x => x.status === col);
-    return `<div class="kcol" data-col="${col}">
-      <div class="kcol__head"><h4>${t(STATUS_KEYS[col])}</h4><span class="kcol__count">${items.length}</span></div>
-      ${items.map(taskCard).join("")}
-    </div>`;
-  }).join("")}</div>`;
-}
-
-function taskCard(x) {
-  const who = x.delegateTo || x.assignedBy;
-  return `<div class="kcard pri-${(x.priority || "low").toLowerCase()}" draggable="true" data-id="${x.id}">
-    <div class="kcard__title">${esc(x.title)}</div>
-    ${x.ownerName ? `<div class="tag" style="margin-bottom:6px;background:var(--brand-soft);color:var(--brand);border-color:transparent">🏠 ${esc(x.ownerName)}</div>` : ""}
-    <div class="kcard__meta">${priChip(x.priority)}<span class="muted">${fmtDate(x.dueDate)}</span></div>
-    <div class="kcard__foot">
-      ${who ? `<span class="avatar-sm" title="${esc(who)}">${initials(who)}</span>` : "<span></span>"}
-      <button class="btn btn--ghost btn--sm" data-edit="${x.id}">${t("btn.edit")}</button>
-    </div>
-  </div>`;
-}
-
-function tasksTable() {
-  const list = filterTasks();
+function tasksTable(list) {
+  if (!list.length) {
+    return `<div class="card"><div class="empty">
+      <div class="empty__icon">${TASK_TAB_ICON[taskTab] || "📋"}</div>
+      <h3>${t("empty.tasks")}</h3></div></div>`;
+  }
+  const rows = list.map(x => {
+    const who = x.delegateTo || x.assignedBy;
+    const running = taskRunning(x);
+    const locked = taskLocked(x);
+    const timerBtn = locked
+      ? `<span title="${t("timer.locked")}">🔒</span>`
+      : `<button class="btn btn--ghost btn--sm" data-timer="${x.id}" title="${running ? t("timer.stop") : t("timer.start")}">${running ? "⏸" : "▶"}</button>`;
+    return `<tr>
+      <td><div class="cell-title">${esc(x.title)}</div><div class="muted">${x.ownerName ? "🏠 " + esc(x.ownerName) + " · " : ""}${esc(x.description || "")}</div></td>
+      <td>${priChip(x.priority)}</td>
+      <td>${who ? `<span class="flex" style="gap:7px"><span class="avatar-sm">${initials(who)}</span>${esc(who)}</span>` : "—"}</td>
+      <td>${fmtDate(x.dueDate)}</td>
+      <td>${statusBadge(x.status)}</td>
+      <td style="white-space:nowrap"><span class="flex" style="gap:6px;align-items:center">${timerBtn}<span data-timerlive="${x.id}" class="${running ? "" : "muted"}" style="font-variant-numeric:tabular-nums">${fmtDur(taskTotalSeconds(x))}</span></span></td>
+      <td><div class="row-actions">
+        <button class="btn btn--ghost btn--sm" data-edit="${x.id}">✎</button>
+        ${D() ? `<button class="btn btn--ghost btn--sm btn--danger" data-del="${x.id}">🗑</button>` : ""}
+      </div></td>
+    </tr>`;
+  }).join("");
   return `<div class="table-wrap"><table>
     <thead><tr>
       <th>${t("th.task")}</th><th>${t("th.priority")}</th><th>${t("th.assignedBy")}</th>
-      <th>${t("th.dueDate")}</th><th>${t("th.status")}</th><th>${t("th.delegate")}</th><th></th>
+      <th>${t("th.dueDate")}</th><th>${t("th.status")}</th><th>${t("timer.col")}</th><th></th>
     </tr></thead>
-    <tbody>
-      ${list.map(x => `<tr>
-        <td><div class="cell-title">${esc(x.title)}</div><div class="muted">${x.ownerName ? "🏠 " + esc(x.ownerName) + " · " : ""}${esc(x.description || "")}</div></td>
-        <td>${priChip(x.priority)}</td>
-        <td>${x.assignedBy ? `<span class="flex" style="gap:7px"><span class="avatar-sm">${initials(x.assignedBy)}</span>${esc(x.assignedBy)}</span>` : "—"}</td>
-        <td>${fmtDate(x.dueDate)}</td>
-        <td>${statusBadge(x.status)}</td>
-        <td>${x.delegateTo ? esc(x.delegateTo) : "—"}</td>
-        <td><div class="row-actions">
-          <button class="btn btn--ghost btn--sm" data-edit="${x.id}">✎</button>
-          ${D() ? `<button class="btn btn--ghost btn--sm btn--danger" data-del="${x.id}">🗑</button>` : ""}
-        </div></td>
-      </tr>`).join("")}
-    </tbody>
+    <tbody>${rows}</tbody>
   </table></div>`;
 }
 
@@ -343,6 +413,7 @@ function taskModal(task, prefill) {
         <div class="field"><label>${t("field.dueDate")}</label><input type="date" id="f_due" value="${esc(x.dueDate || "")}" /></div>
         <div class="field"><label>${t("field.duration")}</label><input id="f_dur" placeholder="00:30" value="${esc(x.duration || "")}" /></div>
       </div>
+      ${editing ? `<div class="field"><label>⏱️ ${t("timer.tracked")}</label><input value="${fmtDur(taskTotalSeconds(x))}${taskRunning(x) ? " · " + t("timer.running") : ""}" disabled /></div>` : ""}
       <div class="field-row">
         <div class="field"><label>${t("task.owner")}</label><select id="f_owner" ${lockOwner ? "disabled" : ""}>
           <option value="">—</option>
@@ -371,6 +442,8 @@ function taskModal(task, prefill) {
       ownerId: oid, ownerName: own ? own.name : (x.ownerName || ""), contactMethod: $("#f_contact").value,
     };
     if (!data.title) { $("#f_title").focus(); return; }
+    // finalize a running timer when the task is being completed/closed
+    if (editing && (data.status === "complete" || data.status === "closed")) Object.assign(data, finalizeTimer(task));
     if (editing) db.updateTask(task.id, data); else db.addTask(data);
     closeModal(); render(); toast(t("toast.saved"));
   };
@@ -893,6 +966,7 @@ function render() {
   document.body.classList.remove("authing");
   renderUserChip();
   try {
+    stopTimerTicker();
     const r = currentRoute();
     const route = allRoutes()[r];
     $("#pageTitle").textContent = t(route.title);
@@ -995,14 +1069,16 @@ function renderUserChip() {
 }
 
 function bindViewEvents(r) {
+  stopTimerTicker();
   // Tasks
   if (r === "tasks") {
     $("#addTask") && ($("#addTask").onclick = () => taskModal(null));
-    $$("[data-mode]").forEach(b => b.onclick = () => { tasksMode = b.dataset.mode; render(); });
+    $$("[data-ttab]").forEach(b => b.onclick = () => { taskTab = b.dataset.ttab; render(); });
     $("#memberFilter") && ($("#memberFilter").onchange = (e) => { taskMember = e.target.value; render(); });
     $$("[data-edit]").forEach(b => b.onclick = () => taskModal(db.tasks.find(x => x.id === b.dataset.edit)));
     $$("[data-del]").forEach(b => b.onclick = () => { if (confirm(t("confirm.delete"))) { db.removeTask(b.dataset.del); render(); toast(t("toast.deleted")); } });
-    enableDragDrop();
+    $$("[data-timer]").forEach(b => b.onclick = () => toggleTaskTimer(b.dataset.timer));
+    startTimerTicker();
   }
   // Content
   if (r === "content") {
@@ -1029,29 +1105,10 @@ function bindViewEvents(r) {
     $("#addOwnerTask") && ($("#addOwnerTask").onclick = () => taskModal(null, {}));
     $$("[data-otaskedit]").forEach(b => b.onclick = () => taskModal(db.tasks.find(x => x.id === b.dataset.otaskedit)));
     $$("[data-otaskdone]").forEach(b => b.onclick = () => {
-      const tk = db.tasks.find(x => x.id === b.dataset.otaskdone);
-      db.updateTask(tk.id, { status: b.checked ? "complete" : "pending" }); render(); toast(t("toast.saved"));
+      applyTaskStatus(b.dataset.otaskdone, b.checked ? "complete" : "pending");
+      render(); toast(t("toast.saved"));
     });
   }
-}
-
-/* Kanban drag & drop */
-function enableDragDrop() {
-  let dragId = null;
-  $$(".kcard").forEach(c => {
-    c.addEventListener("dragstart", () => { dragId = c.dataset.id; c.style.opacity = ".5"; });
-    c.addEventListener("dragend", () => { c.style.opacity = "1"; });
-    // clicking the body (not edit btn) opens edit
-    c.addEventListener("click", (e) => { if (!e.target.closest("[data-edit]")) taskModal(db.tasks.find(x => x.id === c.dataset.id)); });
-  });
-  $$(".kcol").forEach(col => {
-    col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("drag-over"); });
-    col.addEventListener("dragleave", () => col.classList.remove("drag-over"));
-    col.addEventListener("drop", (e) => {
-      e.preventDefault(); col.classList.remove("drag-over");
-      if (dragId) { db.updateTask(dragId, { status: col.dataset.col }); render(); }
-    });
-  });
 }
 
 /* ============================================================
