@@ -110,11 +110,11 @@ function view() {
         <div style="margin-top:6px">${roleBadge(u.role)}</div>
       </div>
     </div>
-    ${isCloud() ? "" : `<div class="field"><label>${t("acc.me.newpw")}</label>
+    <div class="field"><label>${t("acc.me.newpw")}</label>
       <div class="flex" style="gap:8px">
         <input id="me_pw" type="password" class="input" style="flex:1" placeholder="••••••" />
         <button class="btn" id="me_pw_btn">${t("acc.me.changepw")}</button>
-      </div></div>`}
+      </div></div>
     <button class="btn btn--danger" id="me_signout" style="margin-top:14px">⎋ ${t("acc.me.signout")}</button>
   </div>`;
 
@@ -150,7 +150,7 @@ function teamTable(list) {
       <td>${u.active ? `<span class="badge badge--complete">${t("acc.team.active")}</span>` : `<span class="badge badge--closed">${t("acc.team.disabled")}</span>`}</td>
       <td><div class="flex" style="gap:6px">
         <button class="btn btn--sm usr-toggle" data-uid="${esc(u.id)}">${u.active ? t("acc.team.deactivate") : t("acc.team.activate")}</button>
-        ${isCloud() ? "" : `<button class="btn btn--sm usr-pw" data-uid="${esc(u.id)}">🔑</button>`}
+        <button class="btn btn--sm usr-pw" data-uid="${esc(u.id)}" title="${t("acc.team.resetpw")}">🔑</button>
         <button class="btn btn--sm btn--danger usr-del" data-uid="${esc(u.id)}">🗑</button>
       </div></td>
     </tr>`).join("")}</tbody>
@@ -187,8 +187,11 @@ function mount() {
   });
   $("#me_pw_btn") && ($("#me_pw_btn").onclick = async () => {
     const v = $("#me_pw").value;
-    const r = await localSetPw(u.id, v);
-    if (r.error) { op.toast(errMsg(r.error)); return; }
+    if (!v) return;
+    let r;
+    if (isCloud()) { try { await cloud().updateUser(u.id, { password: v }); r = {}; } catch (e) { r = { error: e.code || "generic" }; } }
+    else { r = await localSetPw(u.id, v); }
+    if (r && r.error) { op.toast(errMsg(r.error)); return; }
     $("#me_pw").value = ""; op.toast(t("acc.me.pwchanged"));
   });
 
@@ -220,7 +223,11 @@ function bindTeamRows() {
   });
   $$(".usr-pw").forEach(b => b.onclick = async () => {
     const pw = prompt(t("acc.me.newpw"));
-    if (pw) { await localSetPw(b.dataset.uid, pw); op.toast(t("acc.me.pwchanged")); }
+    if (!pw) return;
+    let r;
+    if (isCloud()) { try { await cloud().updateUser(b.dataset.uid, { password: pw }); r = {}; } catch (e) { r = { error: e.code || "generic" }; } }
+    else { r = await localSetPw(b.dataset.uid, pw); }
+    op.toast(r && r.error ? errMsg(r.error) : t("acc.me.pwchanged"));
   });
   $$(".usr-del").forEach(b => b.onclick = async () => {
     if (!confirm(t("acc.team.delete") + "؟")) return;

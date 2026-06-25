@@ -3,7 +3,7 @@
    DELETE (admin) — both protect the last active admin. */
 import { json, bad, unauthorized, forbidden, serverError, noContent } from "../../_lib/response.js";
 import { first, run, all } from "../../_lib/db.js";
-import { getUser, can, publicUser } from "../../_lib/auth.js";
+import { getUser, can, publicUser, newSalt, hashPassword } from "../../_lib/auth.js";
 
 const ROLES = ["admin", "manager", "member", "viewer"];
 const LEVELS = ["standard", "extended"];
@@ -47,6 +47,14 @@ export async function onRequestPatch(context) {
     if (body.monitor_level !== undefined) {
       if (!LEVELS.includes(body.monitor_level)) return bad("invalid_level");
       sets.push("monitor_level = ?"); binds.push(body.monitor_level);
+    }
+    if (body.password !== undefined) {
+      const pw = String(body.password || "");
+      if (pw.length < 4) return bad("weak");
+      const salt = newSalt();
+      const hash = await hashPassword(pw, salt);
+      sets.push("salt = ?"); binds.push(salt);
+      sets.push("pass_hash = ?"); binds.push(hash);
     }
     if (!sets.length) return bad("nothing_to_update");
 
