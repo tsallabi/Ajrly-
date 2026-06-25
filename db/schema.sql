@@ -85,6 +85,23 @@ CREATE TABLE IF NOT EXISTS owners (
   updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- ---- Finance (expenses + income) ----
+CREATE TABLE IF NOT EXISTS finance (
+  id              TEXT PRIMARY KEY,
+  kind            TEXT NOT NULL DEFAULT 'expense',   -- expense|income
+  name            TEXT,
+  date            TEXT,
+  amount          TEXT,
+  currency        TEXT DEFAULT 'LYD',                -- LYD|USD|EUR|EGP
+  category        TEXT,
+  description     TEXT,
+  attachment      TEXT,                              -- data URL of receipt (image/pdf)
+  attachment_name TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_finance_kind ON finance(kind, date);
+
 -- ---- Customer Service tickets ----
 CREATE TABLE IF NOT EXISTS tickets (
   id               TEXT PRIMARY KEY,
