@@ -267,6 +267,7 @@ const TASK_TAB_ICON = { all: "📋", pending: "🕒", progress: "🔄", complete
 let taskTab = "all";
 let taskMember = "";
 let timerTick = null;
+let bootDone = false;   // true once boot finishes — gates recurring-task rolling
 
 /* ---- Per-task work timer (start/stop many times until complete) ---- */
 function taskSessions(x) {
@@ -1012,6 +1013,8 @@ function render() {
   if (!activeUser()) { renderAuthScreen(); return; }
   document.body.classList.remove("authing");
   renderUserChip();
+  // roll daily recurring tasks forward (after boot so data is loaded)
+  if (bootDone) { try { rollRecurringTasks(); } catch (_) {} }
   try {
     stopTimerTicker();
     const r = currentRoute();
@@ -1225,8 +1228,7 @@ async function boot() {
       } catch (_) { cloudUser = null; }
     }
   } catch (_) { cloudReady = false; }
-  // roll daily recurring tasks forward once data is ready (local + cloud)
-  try { if (activeUser()) rollRecurringTasks(); } catch (_) {}
+  bootDone = true;   // enable recurring-task rolling now that data is loaded
   render();
 }
 try {
