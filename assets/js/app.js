@@ -299,8 +299,14 @@ function toggleTaskTimer(id) {
   const x = db.tasks.find(t => t.id === id);
   if (!x) return;
   if (taskLocked(x)) { toast(t("timer.locked")); return; }
-  if (x.timerStart) db.updateTask(id, finalizeTimer(x));
-  else db.updateTask(id, { timerStart: new Date().toISOString() });
+  if (x.timerStart) {
+    db.updateTask(id, finalizeTimer(x));
+  } else {
+    const patch = { timerStart: new Date().toISOString() };
+    // starting work moves a pending task into "In Progress" automatically
+    if (x.status === "pending") patch.status = "progress";
+    db.updateTask(id, patch);
+  }
   render();
 }
 /* change status, finalizing a running timer when the task is completed/closed */
