@@ -136,6 +136,28 @@ export const FINANCE = {
   ],
 };
 
+export const ASSET_FOLDERS = {
+  table: "asset_folders",
+  prefix: "af",
+  order: "created_at DESC",
+  fields: [
+    { col: "name", key: "name" },
+  ],
+};
+
+export const ASSETS = {
+  table: "assets",
+  prefix: "as",
+  order: "created_at DESC",
+  fields: [
+    { col: "folder_id", key: "folderId" },
+    { col: "name", key: "name" },
+    { col: "type", key: "type" },
+    { col: "size", key: "size" },
+    { col: "r2_key", key: "r2Key" },
+  ],
+};
+
 export const CONTENT = {
   table: "content",
   prefix: "c",

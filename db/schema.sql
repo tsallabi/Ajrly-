@@ -102,6 +102,25 @@ CREATE TABLE IF NOT EXISTS finance (
 );
 CREATE INDEX IF NOT EXISTS idx_finance_kind ON finance(kind, date);
 
+-- ---- Business Assets (named folders + files stored in R2) ----
+CREATE TABLE IF NOT EXISTS asset_folders (
+  id          TEXT PRIMARY KEY,
+  name        TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS assets (
+  id          TEXT PRIMARY KEY,
+  folder_id   TEXT,
+  name        TEXT,
+  type        TEXT,                                  -- MIME type
+  size        INTEGER,
+  r2_key      TEXT,                                  -- object key in the R2 bucket
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_assets_folder ON assets(folder_id);
+
 -- ---- Customer Service tickets ----
 CREATE TABLE IF NOT EXISTS tickets (
   id               TEXT PRIMARY KEY,
