@@ -6,7 +6,6 @@ import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
-import "./modules/analytics.js";
 import "./modules/finance.js";
 import "./modules/account.js";
 import "./modules/team.js";
