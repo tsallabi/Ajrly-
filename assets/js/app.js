@@ -64,6 +64,24 @@ registerStrings({
   },
 });
 
+/* ---- Property-owner tabs, fields & labels ---- */
+registerStrings({
+  ar: {
+    "stage.registered": "مالك مسجّل", "stage.contacted": "تم التواصل",
+    "stage.pending": "بانتظار التواصل", "stage.potential": "مالك محتمل",
+    "field.gender": "الجنس", "field.city": "المدينة", "field.signedUp": "تاريخ التسجيل",
+    "th.city": "المدينة", "th.signedUp": "تاريخ التسجيل",
+    "gender.male": "ذكر", "gender.female": "أنثى",
+  },
+  en: {
+    "stage.registered": "Registered", "stage.contacted": "Contacted",
+    "stage.pending": "Pending contact", "stage.potential": "Potential",
+    "field.gender": "Gender", "field.city": "City", "field.signedUp": "Signed up",
+    "th.city": "City", "th.signedUp": "Signed up",
+    "gender.male": "Male", "gender.female": "Female",
+  },
+});
+
 /* ---- cloud state (set during boot; falls back to local auth when off) ---- */
 let cloudReady = false;
 let cloudUser = null;
@@ -437,41 +455,41 @@ function contentModal(post) {
 /* ============================================================
    VIEW: Owners CRM
    ============================================================ */
-const stageBadge = (s) => `<span class="tag" style="background:var(--brand-soft);color:var(--brand);border-color:transparent">${esc(t("stage." + (s || "recruitment")))}</span>`;
+const STAGE_ICON = { registered: "✅", contacted: "💬", pending: "⏳", potential: "🌱" };
+const ownerStage = (o) => o.stage || "potential";
+let ownerTab = "registered";
 
 function viewOwners() {
   const owners = db.owners;
-  // pipeline summary (maps the sheet's 3 owner tabs into one funnel)
-  const pipeline = `<div class="grid cards-4" style="margin-bottom:16px">
-    ${OWNER_STAGES.map((st, i) => {
-      const n = owners.filter(o => (o.stage || "recruitment") === st).length;
-      return `<div class="card stat">
-        <div class="stat__top"><span class="stat__icon" style="background:var(--brand-soft);color:var(--brand)">${["📣","💬","🎬","✅"][i]}</span></div>
-        <span class="stat__value">${n}</span><span class="stat__label">${t("stage." + st)}</span>
-      </div>`;
-    }).join("")}
+  const counts = {};
+  OWNER_STAGES.forEach(s => { counts[s] = owners.filter(o => ownerStage(o) === s).length; });
+  if (!OWNER_STAGES.includes(ownerTab)) ownerTab = "registered";
+
+  const tabs = `<div class="seg" id="ownerTabs">
+    ${OWNER_STAGES.map(s => `<button data-otab="${s}" class="${ownerTab === s ? "active" : ""}">${STAGE_ICON[s] || "•"} ${esc(t("stage." + s))} <span class="kcol__count">${counts[s]}</span></button>`).join("")}
   </div>`;
   const toolbar = `<div class="toolbar">
-    <div class="toolbar__left"><span class="card__title">${t("owners.pipeline")}</span><span class="muted">${owners.length} ${t("th.owner")}</span></div>
+    <div class="toolbar__left">${tabs}</div>
     <div class="toolbar__right">${W() ? `<button class="btn btn--primary" id="addOwner">＋ ${t("btn.newOwner")}</button>` : ""}</div>
   </div>`;
-  if (!owners.length) {
-    return toolbar + pipeline + `<div class="card"><div class="empty">
-      <div class="empty__icon">🏠</div>
+
+  const list = owners.filter(o => ownerStage(o) === ownerTab);
+  if (!list.length) {
+    return toolbar + `<div class="card"><div class="empty">
+      <div class="empty__icon">${STAGE_ICON[ownerTab] || "🏠"}</div>
       <h3>${t("empty.owners")}</h3>
       <p class="muted">${t("empty.owners.sub")}</p>
     </div></div>`;
   }
-  return toolbar + pipeline + `<div class="table-wrap"><table>
+  return toolbar + `<div class="table-wrap"><table>
     <thead><tr>
-      <th>${t("th.owner")}</th><th>${t("th.phone")}</th><th>${t("th.email")}</th><th>${t("th.listings")}</th>
-      <th>${t("th.stage")}</th><th>${t("th.lastContact")}</th><th></th>
+      <th>${t("th.owner")}</th><th>${t("th.phone")}</th><th>${t("th.email")}</th><th>${t("th.city")}</th>
+      <th>${t("th.listings")}</th><th>${t("th.signedUp")}</th><th>${t("th.lastContact")}</th><th></th>
     </tr></thead>
-    <tbody>${owners.map(o => `<tr>
+    <tbody>${list.map(o => `<tr>
       <td><span class="flex" style="gap:8px"><span class="avatar-sm">${initials(o.name)}</span>${esc(o.name || "—")}</span></td>
-      <td>${esc(o.phone || "—")}</td><td>${esc(o.email || "—")}</td><td>${esc(o.listings || "0")}</td>
-      <td>${stageBadge(o.stage)}</td>
-      <td>${fmtDate(o.lastContact)}</td>
+      <td>${esc(o.phone || "—")}</td><td>${esc(o.email || "—")}</td><td>${esc(o.city || "—")}</td>
+      <td>${esc(o.listings || "0")}</td><td>${o.signedUp ? fmtDate(o.signedUp) : "—"}</td><td>${fmtDate(o.lastContact)}</td>
       <td><div class="row-actions">
         <button class="btn btn--ghost btn--sm" data-oedit="${o.id}">✎</button>
         ${D() ? `<button class="btn btn--ghost btn--sm btn--danger" data-odel="${o.id}">🗑</button>` : ""}
@@ -486,14 +504,25 @@ function ownerModal(owner) {
   openModal(`
     <div class="modal__head"><h3>${editing ? t("modal.editOwner") : t("modal.newOwner")}</h3><button class="icon-btn" data-close>✕</button></div>
     <div class="modal__body">
-      <div class="field"><label>${t("field.name")}</label><input id="o_name" value="${esc(x.name || "")}" /></div>
+      <div class="field-row">
+        <div class="field"><label>${t("field.name")}</label><input id="o_name" value="${esc(x.name || "")}" /></div>
+        <div class="field"><label>${t("field.gender")}</label><select id="o_gender">
+          <option value="">—</option>
+          <option value="male" ${x.gender === "male" ? "selected" : ""}>${t("gender.male")}</option>
+          <option value="female" ${x.gender === "female" ? "selected" : ""}>${t("gender.female")}</option>
+        </select></div>
+      </div>
       <div class="field-row">
         <div class="field"><label>${t("field.phone")}</label><input id="o_phone" value="${esc(x.phone || "")}" /></div>
         <div class="field"><label>${t("field.email")}</label><input id="o_email" value="${esc(x.email || "")}" /></div>
       </div>
       <div class="field-row">
+        <div class="field"><label>${t("field.city")}</label><input id="o_city" value="${esc(x.city || "")}" /></div>
         <div class="field"><label>${t("field.listings")}</label><input type="number" id="o_listings" value="${esc(x.listings || "")}" /></div>
-        <div class="field"><label>${t("field.stage")}</label><select id="o_stage">${OWNER_STAGES.map(s => `<option value="${s}" ${x.stage === s ? "selected" : ""}>${t("stage." + s)}</option>`).join("")}</select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>${t("field.signedUp")}</label><input type="date" id="o_signed" value="${esc(x.signedUp || "")}" /></div>
+        <div class="field"><label>${t("field.stage")}</label><select id="o_stage">${OWNER_STAGES.map(s => `<option value="${s}" ${(editing ? x.stage : ownerTab) === s ? "selected" : ""}>${t("stage." + s)}</option>`).join("")}</select></div>
       </div>
       <div class="field"><label>${t("field.lastContact")}</label><input type="date" id="o_last" value="${esc(x.lastContact || "")}" /></div>
       <div class="field"><label>${t("field.notes")}</label><textarea id="o_notes">${esc(x.notes || "")}</textarea></div>
@@ -505,9 +534,11 @@ function ownerModal(owner) {
     </div>`);
   ($("[data-save]") || {}).onclick = () => {
     const data = {
-      name: $("#o_name").value.trim(), phone: $("#o_phone").value.trim(), email: $("#o_email").value.trim(),
-      listings: $("#o_listings").value, lastContact: $("#o_last").value, notes: $("#o_notes").value.trim(),
-      stage: $("#o_stage").value, status: "pending",
+      name: $("#o_name").value.trim(), gender: $("#o_gender").value,
+      phone: $("#o_phone").value.trim(), email: $("#o_email").value.trim(),
+      city: $("#o_city").value.trim(), listings: $("#o_listings").value,
+      signedUp: $("#o_signed").value, lastContact: $("#o_last").value,
+      notes: $("#o_notes").value.trim(), stage: $("#o_stage").value, status: "pending",
     };
     if (!data.name) { $("#o_name").focus(); return; }
     if (editing) db.updateOwner(owner.id, data); else db.addOwner(data);
@@ -717,6 +748,7 @@ function bindViewEvents(r) {
   }
   // Owners
   if (r === "owners") {
+    $$("[data-otab]").forEach(b => b.onclick = () => { ownerTab = b.dataset.otab; render(); });
     $("#addOwner") && ($("#addOwner").onclick = () => ownerModal(null));
     $$("[data-oedit]").forEach(b => b.onclick = () => ownerModal(db.owners.find(x => x.id === b.dataset.oedit)));
     $$("[data-odel]").forEach(b => b.onclick = () => { if (confirm(t("confirm.delete"))) { db.removeOwner(b.dataset.odel); render(); toast(t("toast.deleted")); } });

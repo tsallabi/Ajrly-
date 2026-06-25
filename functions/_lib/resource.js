@@ -139,9 +139,12 @@ export const OWNERS = {
   order: "created_at DESC",
   fields: [
     { col: "name", key: "name" },
+    { col: "gender", key: "gender" },
     { col: "phone", key: "phone" },
     { col: "email", key: "email" },
+    { col: "city", key: "city" },
     { col: "listings", key: "listings" },
+    { col: "signed_up", key: "signedUp" },
     { col: "last_contact", key: "lastContact" },
     { col: "stage", key: "stage" },
     { col: "notes", key: "notes" },
