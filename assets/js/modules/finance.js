@@ -40,6 +40,7 @@ registerStrings({
     "fin.sum.income": "إجمالي الإيرادات",
     "fin.sum.expense": "إجمالي المصروفات",
     "fin.sum.net": "الصافي",
+    "fin.chart.title": "ملخص السنة (شهرياً)",
     "fin.empty.expense": "لا توجد مصروفات بعد",
     "fin.empty.income": "لا توجد إيرادات بعد",
     "fin.empty.summary": "أضف أول حركة مالية لعرض الملخص",
@@ -78,6 +79,7 @@ registerStrings({
     "fin.sum.income": "Total income",
     "fin.sum.expense": "Total expenses",
     "fin.sum.net": "Net",
+    "fin.chart.title": "Yearly summary (monthly)",
     "fin.empty.expense": "No expenses yet",
     "fin.empty.income": "No income yet",
     "fin.empty.summary": "Add your first entry to see the summary",
@@ -99,6 +101,13 @@ const MAX_ATT = 1.5 * 1024 * 1024; // 1.5 MB
 const ALLOWED = /(pdf|jpe?g|png)$/i;
 
 let finTab = "expense"; // expense | income
+let finYear = null;     // selected year for the chart (null => latest present)
+let finCcy = "";        // selected currency for the chart ("" => most common)
+
+const MONTHS = {
+  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  ar: ["ينا", "فبر", "مار", "أبر", "مايو", "يون", "يول", "أغس", "سبت", "أكت", "نوف", "ديس"],
+};
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -119,6 +128,84 @@ function totals() {
     else by[c].expense += num(r.amount);
   });
   return by;
+}
+
+/* ---------------- yearly chart ---------------- */
+function currenciesPresent() {
+  const s = new Set();
+  records().forEach(r => s.add(r.currency || "LYD"));
+  return s.size ? [...s] : ["LYD"];
+}
+function yearsPresent() {
+  const ys = new Set();
+  records().forEach(r => { const y = (r.date || "").slice(0, 4); if (y) ys.add(y); });
+  ys.add(String(new Date().getFullYear()));
+  return [...ys].sort().reverse(); // latest first
+}
+function pickYear() {
+  const years = yearsPresent();
+  return (finYear && years.map(String).includes(String(finYear))) ? String(finYear) : years[0];
+}
+function pickCcy() {
+  const present = currenciesPresent();
+  if (finCcy && present.includes(finCcy)) return finCcy;
+  const c = {}; records().forEach(r => { const k = r.currency || "LYD"; c[k] = (c[k] || 0) + 1; });
+  return present.slice().sort((a, b) => (c[b] || 0) - (c[a] || 0))[0];
+}
+function monthly(year, ccy) {
+  const inc = Array(12).fill(0), exp = Array(12).fill(0);
+  records().forEach(r => {
+    if ((r.currency || "LYD") !== ccy) return;
+    const d = r.date || "";
+    if (d.slice(0, 4) !== String(year)) return;
+    const m = parseInt(d.slice(5, 7), 10) - 1;
+    if (m < 0 || m > 11) return;
+    if ((r.kind || "expense") === "income") inc[m] += num(r.amount);
+    else exp[m] += num(r.amount);
+  });
+  return { inc, exp };
+}
+function chartSVG(year, ccy) {
+  const { inc, exp } = monthly(year, ccy);
+  const rtl = getLang() === "ar";
+  const months = MONTHS[rtl ? "ar" : "en"];
+  const max = Math.max(1, ...inc, ...exp);
+  const W = 760, H = 260, padL = 8, padR = 8, padTop = 14, padBot = 28;
+  const plotW = W - padL - padR, plotH = H - padTop - padBot;
+  const slot = plotW / 12;
+  const barW = Math.min(14, slot / 3), gap = 3;
+  const grid = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const y = padTop + plotH - f * plotH;
+    return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="0.5"/>`;
+  }).join("");
+  const bars = [];
+  for (let i = 0; i < 12; i++) {
+    const slotIndex = rtl ? (11 - i) : i;
+    const cx = padL + slotIndex * slot + slot / 2;
+    const incH = (inc[i] / max) * plotH, expH = (exp[i] / max) * plotH;
+    const xInc = cx - barW - gap / 2, xExp = cx + gap / 2;
+    bars.push(`<rect x="${xInc.toFixed(1)}" y="${(padTop + plotH - incH).toFixed(1)}" width="${barW.toFixed(1)}" height="${incH.toFixed(1)}" rx="2" fill="var(--st-complete)"><title>${esc(months[i])} · ${esc(t("fin.sum.income"))}: ${money(inc[i], ccy)}</title></rect>`);
+    bars.push(`<rect x="${xExp.toFixed(1)}" y="${(padTop + plotH - expH).toFixed(1)}" width="${barW.toFixed(1)}" height="${expH.toFixed(1)}" rx="2" fill="var(--st-overdue, #ef4444)"><title>${esc(months[i])} · ${esc(t("fin.sum.expense"))}: ${money(exp[i], ccy)}</title></rect>`);
+    bars.push(`<text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="var(--muted, #94a3b8)">${esc(months[i])}</text>`);
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(t("fin.chart.title"))}">${grid}${bars.join("")}</svg>`;
+}
+function chartCard() {
+  if (!records().length) return "";
+  const year = pickYear(), ccy = pickCcy();
+  const yearSel = `<select class="input" id="finYear">${yearsPresent().map(y => `<option value="${y}" ${String(y) === String(year) ? "selected" : ""}>${y}</option>`).join("")}</select>`;
+  const ccySel = `<select class="input" id="finCcy">${currenciesPresent().map(c => `<option value="${c}" ${c === ccy ? "selected" : ""}>${c}</option>`).join("")}</select>`;
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card__head">
+      <span class="card__title">📊 ${esc(t("fin.chart.title"))} — ${esc(year)}</span>
+      <span class="flex" style="gap:8px">${ccySel}${yearSel}</span>
+    </div>
+    <div class="flex" style="gap:16px;margin:2px 2px 8px;font-size:12.5px">
+      <span class="flex" style="gap:6px;align-items:center"><span style="width:11px;height:11px;border-radius:3px;background:var(--st-complete);display:inline-block"></span>${esc(t("fin.sum.income"))}</span>
+      <span class="flex" style="gap:6px;align-items:center"><span style="width:11px;height:11px;border-radius:3px;background:var(--st-overdue,#ef4444);display:inline-block"></span>${esc(t("fin.sum.expense"))}</span>
+    </div>
+    ${chartSVG(year, ccy)}
+  </div>`;
 }
 
 /* ---------------- view ---------------- */
@@ -188,7 +275,7 @@ function view() {
     ? `<button class="btn btn--primary" id="finAdd">＋ ${esc(t("fin.add." + finTab))}</button>`
     : "";
   const toolbar = `<div class="toolbar"><div class="toolbar__left">${tabs}</div><div class="toolbar__right">${addBtn}</div></div>`;
-  return `<div>${summaryCards()}${toolbar}${table()}</div>`;
+  return `<div>${chartCard()}${summaryCards()}${toolbar}${table()}</div>`;
 }
 
 /* ---------------- modal ---------------- */
@@ -274,6 +361,8 @@ function financeModal(rec) {
 function mount(ctx) {
   const reRender = () => (ctx && ctx.render ? ctx.render() : (OS().render && OS().render()));
   $$("[data-fintab]").forEach(b => b.onclick = () => { finTab = b.dataset.fintab; reRender(); });
+  const ys = $("#finYear"); if (ys) ys.onchange = (e) => { finYear = e.target.value; reRender(); };
+  const cs = $("#finCcy"); if (cs) cs.onchange = (e) => { finCcy = e.target.value; reRender(); };
   const add = $("#finAdd");
   if (add) add.onclick = () => financeModal(null);
   $$("[data-fedit]").forEach(b => b.onclick = () => financeModal(records().find(r => r.id === b.dataset.fedit)));
