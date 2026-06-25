@@ -27,8 +27,11 @@ registerStrings({
     "as.confirmDelFolder": "حذف هذا المجلد وكل ملفاته؟",
     "as.confirmDelFile": "حذف هذا الملف؟",
     "as.cloudReq": "هذا القسم يحتاج وضع السحابة (مع تخزين R2). يتم تفعيله من قِبل المدير.",
-    "as.setupHint": "تعذّر تحميل الأصول. تأكد من إنشاء جداول قاعدة البيانات وتفعيل تخزين R2.",
+    "as.setupHint": "هذا القسم غير مُفعّل بعد. لإنشاء المجلدات يجب إنشاء جداول قاعدة البيانات، ولرفع الملفات يجب تفعيل تخزين R2. راسل المدير لإكمال التفعيل.",
+    "as.created": "تم إنشاء المجلد",
+    "as.renamed": "تم تغيير الاسم",
     "as.storageOff": "تخزين الملفات (R2) غير مفعّل بعد — لا يمكن الرفع حالياً.",
+    "as.opFailed": "فشلت العملية — القسم غير مُفعّل بعد (الجداول/التخزين).",
     "as.tooBig": "الملف كبير جداً (الحد المقترح 200 ميجابايت).",
     "as.th.name": "الاسم", "as.th.type": "النوع", "as.th.size": "الحجم", "as.th.date": "التاريخ",
   },
@@ -50,8 +53,11 @@ registerStrings({
     "as.confirmDelFolder": "Delete this folder and all its files?",
     "as.confirmDelFile": "Delete this file?",
     "as.cloudReq": "This section needs cloud mode (with R2 storage). Ask your admin to enable it.",
-    "as.setupHint": "Couldn't load assets. Make sure the database tables exist and R2 storage is enabled.",
+    "as.setupHint": "This section isn't activated yet. Creating folders needs the database tables, and uploading files needs R2 storage. Ask your admin to finish setup.",
+    "as.created": "Folder created",
+    "as.renamed": "Renamed",
     "as.storageOff": "File storage (R2) is not enabled yet — uploads are unavailable.",
+    "as.opFailed": "Action failed — the section isn't activated yet (tables/storage).",
     "as.tooBig": "File is too large (suggested max 200 MB).",
     "as.th.name": "Name", "as.th.type": "Type", "as.th.size": "Size", "as.th.date": "Date",
   },
@@ -241,21 +247,23 @@ function mount(ctx) {
   if (nf) nf.onclick = async () => {
     const name = (prompt(t("as.folderName")) || "").trim();
     if (!name) return;
-    try { await apiSend("/api/assets/folders", "POST", { name }); } catch (_) {}
-    await load(reRender);
+    try { await apiSend("/api/assets/folders", "POST", { name }); await load(reRender); OS().toast(t("as.created")); }
+    catch (_) { OS().toast(t("as.opFailed")); }
   };
   $$("[data-frename]").forEach(b => b.onclick = async () => {
     const f = (folders || []).find(x => x.id === b.dataset.frename);
     const name = (prompt(t("as.folderName"), f ? f.name : "") || "").trim();
     if (!name) return;
-    try { await apiSend("/api/assets/folders/" + b.dataset.frename, "PATCH", { name }); } catch (_) {}
-    await load(reRender);
+    try { await apiSend("/api/assets/folders/" + b.dataset.frename, "PATCH", { name }); await load(reRender); OS().toast(t("as.renamed")); }
+    catch (_) { OS().toast(t("as.opFailed")); }
   });
   $$("[data-fdel]").forEach(b => b.onclick = async () => {
     if (!confirm(t("as.confirmDelFolder"))) return;
-    try { await apiSend("/api/assets/folders/" + b.dataset.fdel, "DELETE"); } catch (_) {}
-    if (openFolder === b.dataset.fdel) openFolder = null;
-    await load(reRender);
+    try {
+      await apiSend("/api/assets/folders/" + b.dataset.fdel, "DELETE");
+      if (openFolder === b.dataset.fdel) openFolder = null;
+      await load(reRender); OS().toast(t("as.deleted") || "OK");
+    } catch (_) { OS().toast(t("as.opFailed")); }
   });
 
   const upBtn = $("#asUploadBtn"); const fileInput = $("#asFile");
