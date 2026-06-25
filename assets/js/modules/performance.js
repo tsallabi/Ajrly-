@@ -92,9 +92,39 @@ let fFrom = "";         // ISO date
 let fTo = "";           // ISO date
 let cache = null;       // last fetched/computed { users, generatedAt, local }
 let loading = false;
+let weekHoursMap = {};  // { memberName: seconds } accumulated this week (from task timers)
 
 /* ---------------- helpers ---------------- */
 const OS = () => window.AjrlyOS || {};
+
+/* current week (Mon 00:00 .. next Mon) as epoch ms */
+function weekRange() {
+  const now = new Date();
+  const diffToMon = (now.getDay() + 6) % 7;       // 0=Mon .. 6=Sun
+  const start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(now.getDate() - diffToMon);
+  const end = new Date(start); end.setDate(start.getDate() + 7);
+  return { start: start.getTime(), end: end.getTime() };
+}
+/* sum task-timer sessions per member for the current week (seconds) */
+function computeWeekHours() {
+  const { start, end } = weekRange();
+  const tasks = (OS().db && OS().db.tasks) || [];
+  const map = {};
+  tasks.forEach(x => {
+    let log = x.timeLog;
+    if (typeof log === "string" && log) { try { log = JSON.parse(log); } catch (e) { log = []; } }
+    if (!Array.isArray(log)) return;
+    log.forEach(s => {
+      const tEnd = new Date(s.end || s.start).getTime();
+      if (isNaN(tEnd) || tEnd < start || tEnd >= end) return;
+      const who = s.by || x.delegateTo || x.assignedBy || "";
+      if (who) map[who] = (map[who] || 0) + (Number(s.seconds) || 0);
+    });
+  });
+  return map;
+}
+/* seconds -> hours with one decimal */
+const weekHoursOf = (name) => Math.round(((weekHoursMap[name] || 0) / 3600) * 10) / 10;
 const esc = (s) => (OS().esc ? OS().esc(s) : String(s ?? ""));
 const isRTL = () => getLang() === "ar";
 function nf(n) { return Number(n || 0).toLocaleString(getLang() === "ar" ? "ar-EG" : "en-GB"); }
@@ -305,6 +335,7 @@ function employeeCard(u) {
       ${metricRow(t("pf.m.onTime"), pct(u.onTimeRate))}
       ${metricRow(t("pf.m.perDay"), perDay)}
       ${metricRow(t("pf.m.done"), num(u.tasksDone))}
+      ${metricRow(t("pf.m.hours"), weekHoursOf(u.name) ? nf(weekHoursOf(u.name)) : na())}
       ${metricRow(t("pf.m.active"), num(u.activeMinutes))}
       ${metricRow(t("pf.m.firstResp"), resp)}
       ${metricRow(t("pf.m.tickets"), num(u.ticketsResolved))}
@@ -330,6 +361,7 @@ function leaderboard(users) {
     <td>${u.completionRate == null ? na() : nf(u.completionRate) + "%"}</td>
     <td>${u.onTimeRate == null ? na() : nf(u.onTimeRate) + "%"}</td>
     <td>${u.tasksDone == null ? na() : nf(u.tasksDone)}</td>
+    <td>${weekHoursOf(u.name) ? nf(weekHoursOf(u.name)) : na()}</td>
   </tr>`).join("");
   return `<div class="card">
     <div class="card__head"><span class="card__title">${esc(t("pf.leaderboard"))}</span></div>
@@ -342,6 +374,7 @@ function leaderboard(users) {
           <th>${esc(t("pf.m.completion"))}</th>
           <th>${esc(t("pf.m.onTime"))}</th>
           <th>${esc(t("pf.m.done"))}</th>
+          <th>${esc(t("pf.m.hours"))}</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -357,6 +390,7 @@ function emptyBox() {
    VIEW
    ============================================================ */
 function view() {
+  weekHoursMap = computeWeekHours();
   const TEAM = (OS().team ? OS().team() : OS().TEAM) || [];
 
   const localNote = cache && cache.local
