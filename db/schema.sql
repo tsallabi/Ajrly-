@@ -113,9 +113,10 @@ CREATE TABLE IF NOT EXISTS assets (
   id          TEXT PRIMARY KEY,
   folder_id   TEXT,
   name        TEXT,
-  type        TEXT,                                  -- MIME type
+  url         TEXT,                                  -- link to the file (e.g. Google Drive)
+  type        TEXT,                                  -- optional hint (image/pdf/video/…)
   size        INTEGER,
-  r2_key      TEXT,                                  -- object key in the R2 bucket
+  r2_key      TEXT,                                  -- (legacy) object key if stored in R2
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );

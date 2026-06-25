@@ -169,6 +169,7 @@ export const ASSETS = {
   fields: [
     { col: "folder_id", key: "folderId" },
     { col: "name", key: "name" },
+    { col: "url", key: "url" },
     { col: "type", key: "type" },
     { col: "size", key: "size" },
     { col: "r2_key", key: "r2Key" },

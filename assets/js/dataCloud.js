@@ -29,6 +29,7 @@ function persistSnapshot(db) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       tasks: db.tasks, content: db.content, owners: db.owners, finance: db.finance,
+      assetFolders: db.assetFolders, assets: db.assets,
     }));
   } catch (_) { /* ignore quota/availability */ }
 }
@@ -42,7 +43,11 @@ export async function hydrateFromCloud(db) {
   replaceInPlace(db.tasks, data.tasks);
   replaceInPlace(db.content, data.content);
   replaceInPlace(db.owners, data.owners);
-  replaceInPlace(db.finance, data.finance || []);
+  // optional tables: only replace when the server actually sent them, so a
+  // missing/not-yet-migrated table never wipes the local copy on refresh.
+  if (Array.isArray(data.finance)) replaceInPlace(db.finance, data.finance);
+  if (Array.isArray(data.assetFolders)) replaceInPlace(db.assetFolders, data.assetFolders);
+  if (Array.isArray(data.assets)) replaceInPlace(db.assets, data.assets);
   persistSnapshot(db);
   return data;
 }
@@ -111,6 +116,24 @@ export function wireWriteThrough(db, onError) {
     cloud.updateFinance(id, patch).then((row) => mergeServerRow(db.finance, id, row)).catch(report);
   });
   wrap("removeFinance", (id) => { cloud.removeFinance(id).catch(report); });
+
+  wrap("addAssetFolder", (f) => {
+    const local = newest(db.assetFolders);
+    cloud.createAssetFolder(f).then((row) => mergeServerRow(db.assetFolders, local && local.id, row)).catch(report);
+  });
+  wrap("updateAssetFolder", (id, patch) => {
+    cloud.updateAssetFolder(id, patch).then((row) => mergeServerRow(db.assetFolders, id, row)).catch(report);
+  });
+  wrap("removeAssetFolder", (id) => { cloud.removeAssetFolder(id).catch(report); });
+
+  wrap("addAsset", (a) => {
+    const local = newest(db.assets);
+    cloud.createAsset(a).then((row) => mergeServerRow(db.assets, local && local.id, row)).catch(report);
+  });
+  wrap("updateAsset", (id, patch) => {
+    cloud.updateAsset(id, patch).then((row) => mergeServerRow(db.assets, id, row)).catch(report);
+  });
+  wrap("removeAsset", (id) => { cloud.removeAsset(id).catch(report); });
 
   try { Object.defineProperty(db, "__cloudWired", { value: true, enumerable: false }); } catch (_) {}
   return true;

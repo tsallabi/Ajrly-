@@ -32,6 +32,10 @@ const seedOwners = [];
 /* ---- Seed: Finance (expenses + income), starts empty ---- */
 const seedFinance = [];
 
+/* ---- Seed: Business Assets (folders + link items), starts empty ---- */
+const seedAssetFolders = [];
+const seedAssets = [];
+
 /* ---- Static reference: Content pillars (from Pillar matrix) ---- */
 export const PILLARS = [
   { name: "Property Discovery", sub: "Core Product", icon: "🔍", purpose: "Help renters discover properties and inspire bookings." },
@@ -65,7 +69,7 @@ export const LINKS = [
 ];
 
 /* ---- Store ---- */
-const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance });
+const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets });
 
 let state = load();
 
@@ -105,6 +109,16 @@ export const db = {
   addFinance(f) { state.finance.unshift({ ...f, id: uid("f") }); persist(); },
   updateFinance(id, patch) { state.finance = state.finance.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
   removeFinance(id) { state.finance = state.finance.filter(x => x.id !== id); persist(); },
+
+  get assetFolders() { return state.assetFolders; },
+  addAssetFolder(f) { state.assetFolders.unshift({ ...f, id: uid("af") }); persist(); },
+  updateAssetFolder(id, patch) { state.assetFolders = state.assetFolders.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
+  removeAssetFolder(id) { state.assetFolders = state.assetFolders.filter(x => x.id !== id); state.assets = state.assets.filter(a => a.folderId !== id); persist(); },
+
+  get assets() { return state.assets; },
+  addAsset(a) { state.assets.unshift({ ...a, id: uid("as") }); persist(); },
+  updateAsset(id, patch) { state.assets = state.assets.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
+  removeAsset(id) { state.assets = state.assets.filter(x => x.id !== id); persist(); },
 
   reset() { state = defaultState(); persist(); },
   exportJSON() { return JSON.stringify(state, null, 2); },
