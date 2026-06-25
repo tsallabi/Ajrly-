@@ -23,10 +23,11 @@ database_id = "6a319b33-1f27-4afa-97cd-265dc660f2f1"
 binding = "KV"
 id = "685734c205d14d5e98ccc476d3f90115"
 
-# Business Assets file storage (R2 bucket "ajrly-assets").
-[[r2_buckets]]
-binding = "ASSETS"
-bucket_name = "ajrly-assets"
+# Business Assets file storage — R2 bucket.
+# Build failed binding "ajrly-assets"; re-enable once the exact bucket name is confirmed.
+# [[r2_buckets]]
+# binding = "ASSETS"
+# bucket_name = "ajrly-assets"
 
 [vars]
 SESSION_SECRET = "1a3ad50e15e9241c137411d0f3c9f7c9a1eff4ea32af4cd4d5dfa42a8fd6676f"
