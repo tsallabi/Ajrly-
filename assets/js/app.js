@@ -81,6 +81,12 @@ registerStrings({
     "owner.logTitle": "تسجيل تواصل", "owner.summary": "ملخص المحادثة", "owner.summaryPh": "عمّ تحدثتم؟",
     "owner.next": "ماذا نناقش المرة القادمة؟", "owner.nextPh": "نقاط المتابعة القادمة",
     "owner.logged": "تم تسجيل التواصل", "owner.type": "النوع",
+    "stage.tasks": "مهام الملاك",
+    "owner.createTask": "إنشاء مهمة", "owner.noTasks": "لا توجد مهام للملاك بعد",
+    "owner.noTasksSub": "أنشئ مهمة لمساعدة مالك من تبويب «بانتظار التواصل» أو من ملف المالك",
+    "owner.community": "عضو مجتمع", "owner.community.add": "تعيين كعضو مجتمع", "owner.community.remove": "إزالة من المجتمع",
+    "task.owner": "المالك المرتبط", "task.contact": "وسيلة التواصل المفضّلة",
+    "contact.whatsapp": "واتساب", "contact.phone": "اتصال", "contact.email": "بريد",
   },
   en: {
     "stage.registered": "Registered", "stage.contacted": "Contacted",
@@ -97,6 +103,12 @@ registerStrings({
     "owner.logTitle": "Log contact", "owner.summary": "What was discussed", "owner.summaryPh": "What did you talk about?",
     "owner.next": "What to discuss next time", "owner.nextPh": "Next follow-up points",
     "owner.logged": "Contact logged", "owner.type": "Type",
+    "stage.tasks": "Owner Tasks",
+    "owner.createTask": "Create task", "owner.noTasks": "No owner tasks yet",
+    "owner.noTasksSub": "Create a task to help an owner from the Pending tab or the owner profile",
+    "owner.community": "Community member", "owner.community.add": "Make community member", "owner.community.remove": "Remove from community",
+    "task.owner": "Related owner", "task.contact": "Preferred contact",
+    "contact.whatsapp": "WhatsApp", "contact.phone": "Call", "contact.email": "Email",
   },
 });
 
@@ -289,6 +301,7 @@ function taskCard(x) {
   const who = x.delegateTo || x.assignedBy;
   return `<div class="kcard pri-${(x.priority || "low").toLowerCase()}" draggable="true" data-id="${x.id}">
     <div class="kcard__title">${esc(x.title)}</div>
+    ${x.ownerName ? `<div class="tag" style="margin-bottom:6px;background:var(--brand-soft);color:var(--brand);border-color:transparent">🏠 ${esc(x.ownerName)}</div>` : ""}
     <div class="kcard__meta">${priChip(x.priority)}<span class="muted">${fmtDate(x.dueDate)}</span></div>
     <div class="kcard__foot">
       ${who ? `<span class="avatar-sm" title="${esc(who)}">${initials(who)}</span>` : "<span></span>"}
@@ -306,7 +319,7 @@ function tasksTable() {
     </tr></thead>
     <tbody>
       ${list.map(x => `<tr>
-        <td><div class="cell-title">${esc(x.title)}</div><div class="muted">${esc(x.description || "")}</div></td>
+        <td><div class="cell-title">${esc(x.title)}</div><div class="muted">${x.ownerName ? "🏠 " + esc(x.ownerName) + " · " : ""}${esc(x.description || "")}</div></td>
         <td>${priChip(x.priority)}</td>
         <td>${x.assignedBy ? `<span class="flex" style="gap:7px"><span class="avatar-sm">${initials(x.assignedBy)}</span>${esc(x.assignedBy)}</span>` : "—"}</td>
         <td>${fmtDate(x.dueDate)}</td>
@@ -321,9 +334,10 @@ function tasksTable() {
   </table></div>`;
 }
 
-function taskModal(task) {
-  const x = task || { priority: "Medium", status: "pending" };
+function taskModal(task, prefill) {
+  const x = task || Object.assign({ priority: "Medium", status: "pending" }, prefill || {});
   const editing = !!task;
+  const lockOwner = !!(prefill && prefill.lockOwner);
   const opt = (val, cur, label) => `<option value="${val}" ${cur === val ? "selected" : ""}>${label}</option>`;
   openModal(`
     <div class="modal__head"><h3>${editing ? t("modal.editTask") : t("modal.newTask")}</h3><button class="icon-btn" data-close>✕</button></div>
@@ -342,6 +356,16 @@ function taskModal(task) {
         <div class="field"><label>${t("field.dueDate")}</label><input type="date" id="f_due" value="${esc(x.dueDate || "")}" /></div>
         <div class="field"><label>${t("field.duration")}</label><input id="f_dur" placeholder="00:30" value="${esc(x.duration || "")}" /></div>
       </div>
+      <div class="field-row">
+        <div class="field"><label>${t("task.owner")}</label><select id="f_owner" ${lockOwner ? "disabled" : ""}>
+          <option value="">—</option>
+          ${db.owners.map(o => `<option value="${o.id}" ${x.ownerId === o.id ? "selected" : ""}>${esc(o.name || "—")}</option>`).join("")}
+        </select></div>
+        <div class="field"><label>${t("task.contact")}</label><select id="f_contact">
+          <option value="">—</option>
+          ${CONTACT_METHODS.map(m => opt(m, x.contactMethod, t("contact." + m))).join("")}
+        </select></div>
+      </div>
     </div>
     <div class="modal__foot">
       ${editing && D() ? `<button class="btn btn--danger" data-delete>${t("btn.delete")}</button>` : ""}
@@ -350,11 +374,14 @@ function taskModal(task) {
     </div>`);
 
   ($("[data-save]") || {}).onclick = () => {
+    const oid = $("#f_owner").value;
+    const own = db.owners.find(o => o.id === oid);
     const data = {
       title: $("#f_title").value.trim(), description: $("#f_desc").value.trim(),
       priority: $("#f_pri").value, status: $("#f_status").value,
       assignedBy: $("#f_by").value, delegateTo: $("#f_del").value,
       dueDate: $("#f_due").value, duration: $("#f_dur").value,
+      ownerId: oid, ownerName: own ? own.name : (x.ownerName || ""), contactMethod: $("#f_contact").value,
     };
     if (!data.title) { $("#f_title").focus(); return; }
     if (editing) db.updateTask(task.id, data); else db.addTask(data);
@@ -473,9 +500,10 @@ function contentModal(post) {
 /* ============================================================
    VIEW: Owners CRM
    ============================================================ */
-const STAGE_ICON = { registered: "✅", contacted: "💬", pending: "⏳", potential: "🌱" };
-const OWNER_TABS = ["registered", "contacted", "pending", "potential"];
+const STAGE_ICON = { registered: "✅", contacted: "💬", pending: "⏳", potential: "🌱", tasks: "🛠️" };
+const OWNER_TABS = ["registered", "contacted", "pending", "potential", "tasks"];
 const CONTACT_CYCLE = 14; // days between contacts
+const CONTACT_METHODS = ["whatsapp", "phone", "email"];
 let ownerTab = "registered";
 
 const ownerType = (o) => (o.stage === "potential" ? "potential" : "registered");
@@ -501,27 +529,32 @@ function ownerInTab(o, tab) {
   return tab === "pending" ? due : !due;             // contacted = within the cycle
 }
 
+const ownerTasks = () => db.tasks.filter(x => x.ownerId);
+
 function viewOwners() {
   const owners = db.owners;
   const counts = {};
-  OWNER_TABS.forEach(tab => { counts[tab] = owners.filter(o => ownerInTab(o, tab)).length; });
+  OWNER_TABS.forEach(tab => {
+    counts[tab] = tab === "tasks"
+      ? ownerTasks().filter(x => x.status !== "complete" && x.status !== "closed").length
+      : owners.filter(o => ownerInTab(o, tab)).length;
+  });
   if (!OWNER_TABS.includes(ownerTab)) ownerTab = "registered";
 
   const tabs = `<div class="seg" id="ownerTabs">
     ${OWNER_TABS.map(s => `<button data-otab="${s}" class="${ownerTab === s ? "active" : ""}">${STAGE_ICON[s]} ${esc(t("stage." + s))} <span class="kcol__count">${counts[s]}</span></button>`).join("")}
   </div>`;
-  const toolbar = `<div class="toolbar">
-    <div class="toolbar__left">${tabs}</div>
-    <div class="toolbar__right">
-      <button class="btn btn--sm" id="ownerTpl" title="${t("owner.tpl")}">⬇ ${t("owner.tpl")}</button>
-      <button class="btn btn--sm" id="ownerXlsx">⬆ ${t("owner.bulk")}</button>
-      ${W() ? `<button class="btn btn--primary" id="addOwner">＋ ${t("btn.newOwner")}</button>` : ""}
-      <input type="file" id="ownerFile" accept=".csv,.xlsx,.xls" hidden />
-    </div>
-  </div>`;
+  const rightActions = ownerTab === "tasks"
+    ? (W() ? `<button class="btn btn--primary" id="addOwnerTask">＋ ${t("owner.createTask")}</button>` : "")
+    : `<button class="btn btn--sm" id="ownerTpl" title="${t("owner.tpl")}">⬇ ${t("owner.tpl")}</button>
+       <button class="btn btn--sm" id="ownerXlsx">⬆ ${t("owner.bulk")}</button>
+       ${W() ? `<button class="btn btn--primary" id="addOwner">＋ ${t("btn.newOwner")}</button>` : ""}
+       <input type="file" id="ownerFile" accept=".csv,.xlsx,.xls" hidden />`;
+  const toolbar = `<div class="toolbar"><div class="toolbar__left">${tabs}</div><div class="toolbar__right">${rightActions}</div></div>`;
+
+  if (ownerTab === "tasks") return toolbar + ownerTasksView();
 
   let list = owners.filter(o => ownerInTab(o, ownerTab));
-  // priority owners first, then most-overdue
   list = list.sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || daysSinceContact(b) - daysSinceContact(a));
 
   if (!list.length) {
@@ -535,15 +568,17 @@ function viewOwners() {
     const due = daysSinceContact(o);
     const dueTxt = o.lastContact ? (due > CONTACT_CYCLE ? `<span style="color:var(--st-overdue)">${due}${t("owner.daysAgo")}</span>` : `${due}${t("owner.daysAgo")}`) : `<span class="muted">${t("owner.never")}</span>`;
     const checked = (o.lastContact && due <= CONTACT_CYCLE) ? "checked" : "";
+    const community = o.community ? ` <span class="tag" style="background:var(--brand-soft);color:var(--brand);border-color:transparent">👥 ${t("owner.community")}</span>` : "";
     return `<tr>
       <td><span class="flex" style="gap:8px;align-items:center">
         <button class="btn btn--ghost btn--sm owner-star" data-ostar="${o.id}" title="${t("owner.priority")}" style="padding:2px 4px">${o.priority ? "⭐" : "☆"}</button>
-        <a href="#" class="cell-title owner-open" data-oprofile="${o.id}" style="color:var(--brand)">${esc(o.name || "—")}</a>
+        <a href="#" class="cell-title owner-open" data-oprofile="${o.id}" style="color:var(--brand)">${esc(o.name || "—")}</a>${community}
       </span></td>
       <td>${esc(o.phone || "—")}</td><td>${esc(o.city || "—")}</td>
       <td>${o.lastContact ? fmtDate(o.lastContact) : "—"}</td><td>${dueTxt}</td>
       <td style="text-align:center"><input type="checkbox" class="owner-contacted" data-ocontact="${o.id}" ${checked} title="${t("owner.markContacted")}" style="width:18px;height:18px;cursor:pointer" /></td>
       <td><div class="row-actions">
+        ${W() ? `<button class="btn btn--ghost btn--sm" data-otask="${o.id}" title="${t("owner.createTask")}">＋🛠️</button>` : ""}
         <button class="btn btn--ghost btn--sm" data-oedit="${o.id}">✎</button>
         ${D() ? `<button class="btn btn--ghost btn--sm btn--danger" data-odel="${o.id}">🗑</button>` : ""}
       </div></td>
@@ -555,6 +590,30 @@ function viewOwners() {
       <th>${t("th.owner")}</th><th>${t("th.phone")}</th><th>${t("th.city")}</th>
       <th>${t("th.lastContact")}</th><th>${t("owner.since")}</th><th style="text-align:center">${t("owner.contacted")}</th><th></th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/* ---- 5th tab: owner-help tasks (these are real tasks, shown in Tasks too) ---- */
+function ownerTasksView() {
+  const list = ownerTasks().slice().sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
+  if (!list.length) return `<div class="card"><div class="empty"><div class="empty__icon">🛠️</div><h3>${t("owner.noTasks")}</h3><p class="muted">${t("owner.noTasksSub")}</p></div></div>`;
+  return `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>${t("task.owner")}</th><th>${t("th.task")}</th><th>${t("th.assignedBy")}</th><th>${t("task.contact")}</th>
+      <th>${t("th.dueDate")}</th><th>${t("th.priority")}</th><th>${t("th.status")}</th><th style="text-align:center">✓</th><th></th>
+    </tr></thead>
+    <tbody>${list.map(x => {
+      const who = x.delegateTo || x.assignedBy;
+      const done = x.status === "complete";
+      return `<tr>
+        <td><b>${esc(x.ownerName || "—")}</b></td>
+        <td><div class="cell-title" style="${done ? "text-decoration:line-through;opacity:.6" : ""}">${esc(x.title)}</div><div class="muted">${esc(x.description || "")}</div></td>
+        <td>${who ? esc(who) : "—"}</td>
+        <td>${x.contactMethod ? t("contact." + x.contactMethod) : "—"}</td>
+        <td>${fmtDate(x.dueDate)}</td><td>${priChip(x.priority)}</td><td>${statusBadge(x.status)}</td>
+        <td style="text-align:center"><input type="checkbox" data-otaskdone="${x.id}" ${done ? "checked" : ""} style="width:18px;height:18px;cursor:pointer" /></td>
+        <td><div class="row-actions"><button class="btn btn--ghost btn--sm" data-otaskedit="${x.id}">✎</button></div></td>
+      </tr>`;
+    }).join("")}</tbody></table></div>`;
 }
 
 /* ---- Owner profile (all info + dated contact log) ---- */
@@ -576,8 +635,11 @@ function ownerProfile(owner) {
         ${wa ? `<a class="btn btn--sm" href="${wa}" target="_blank" rel="noopener">🟢 ${t("intg.due.wa")}</a>` : ""}
         ${o.email ? `<a class="btn btn--sm" href="mailto:${esc(o.email)}">✉️ ${t("intg.due.email")}</a>` : ""}
         <button class="btn btn--sm" data-ostar2="${o.id}">${o.priority ? "⭐ " + t("owner.unprioritize") : "☆ " + t("owner.prioritize")}</button>
+        <button class="btn btn--sm" data-ocomm="${o.id}">${o.community ? "👥 " + t("owner.community.remove") : "👥 " + t("owner.community.add")}</button>
+        ${W() ? `<button class="btn btn--sm" data-otask3="${o.id}">＋🛠️ ${t("owner.createTask")}</button>` : ""}
         ${W() ? `<button class="btn btn--sm" data-oedit2="${o.id}">✎ ${t("btn.edit")}</button>` : ""}
       </div>
+      ${o.community ? `<div style="margin-bottom:8px"><span class="tag" style="background:var(--brand-soft);color:var(--brand);border-color:transparent">👥 ${t("owner.community")}</span></div>` : ""}
       ${info(t("field.gender"), o.gender ? t("gender." + o.gender) : "")}
       ${info(t("field.phone"), esc(o.phone))}
       ${info(t("field.email"), esc(o.email))}
@@ -598,7 +660,14 @@ function ownerProfile(owner) {
   ($("[data-ologadd]") || {}).onclick = () => logContactModal(cur());
   ($("[data-oedit2]") || {}).onclick = () => ownerModal(cur());
   ($("[data-ostar2]") || {}).onclick = () => { const c = cur(); db.updateOwner(c.id, { priority: !c.priority }); render(); ownerProfile(db.owners.find(x => x.id === o.id)); };
+  ($("[data-ocomm]") || {}).onclick = () => { const c = cur(); db.updateOwner(c.id, { community: !c.community }); render(); ownerProfile(db.owners.find(x => x.id === o.id)); };
+  ($("[data-otask3]") || {}).onclick = () => { const c = cur(); ownerCreateTask(c); };
   $$("[data-close]").forEach(b => b.onclick = closeModal);
+}
+
+/* open the task modal pre-linked to an owner */
+function ownerCreateTask(o) {
+  taskModal(null, { ownerId: o.id, ownerName: o.name, contactMethod: o.phone ? "whatsapp" : (o.email ? "email" : ""), lockOwner: true });
 }
 
 /* ---- Log a contact (resets the 2-week timer) ---- */
@@ -654,6 +723,7 @@ function ownerModal(owner) {
         <div class="field"><label>${t("owner.type")}</label><select id="o_stage">${types.map(s => `<option value="${s}" ${(x.stage === "potential" ? "potential" : "registered") === s ? "selected" : ""}>${t("stage." + s)}</option>`).join("")}</select></div>
       </div>
       <div class="field"><label>${t("field.lastContact")}</label><input type="date" id="o_last" value="${esc(x.lastContact || "")}" /></div>
+      <label class="flex" style="gap:8px;cursor:pointer;margin:2px 0"><input type="checkbox" id="o_community" ${x.community ? "checked" : ""} style="width:17px;height:17px" /> 👥 ${t("owner.community")}</label>
       <div class="field"><label>${t("field.notes")}</label><textarea id="o_notes">${esc(x.notes || "")}</textarea></div>
     </div>
     <div class="modal__foot">
@@ -667,6 +737,7 @@ function ownerModal(owner) {
       phone: $("#o_phone").value.trim(), email: $("#o_email").value.trim(),
       city: $("#o_city").value.trim(), listings: $("#o_listings").value,
       signedUp: $("#o_signed").value, lastContact: $("#o_last").value,
+      community: $("#o_community").checked,
       notes: $("#o_notes").value.trim(), stage: $("#o_stage").value, status: "pending",
     };
     if (!data.name) { $("#o_name").focus(); return; }
@@ -949,6 +1020,14 @@ function bindViewEvents(r) {
     $("#ownerTpl") && ($("#ownerTpl").onclick = downloadOwnerTemplate);
     $("#ownerXlsx") && ($("#ownerXlsx").onclick = () => $("#ownerFile") && $("#ownerFile").click());
     $("#ownerFile") && ($("#ownerFile").onchange = (e) => { const f = e.target.files[0]; if (f) ownerBulkAdd(f); e.target.value = ""; });
+    // owner-help tasks
+    $$("[data-otask]").forEach(b => b.onclick = () => ownerCreateTask(db.owners.find(x => x.id === b.dataset.otask)));
+    $("#addOwnerTask") && ($("#addOwnerTask").onclick = () => taskModal(null, {}));
+    $$("[data-otaskedit]").forEach(b => b.onclick = () => taskModal(db.tasks.find(x => x.id === b.dataset.otaskedit)));
+    $$("[data-otaskdone]").forEach(b => b.onclick = () => {
+      const tk = db.tasks.find(x => x.id === b.dataset.otaskdone);
+      db.updateTask(tk.id, { status: b.checked ? "complete" : "pending" }); render(); toast(t("toast.saved"));
+    });
   }
 }
 

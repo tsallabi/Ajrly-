@@ -33,10 +33,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   duration    TEXT,
   notes       TEXT,
   created_by  TEXT,
+  owner_id    TEXT,                                  -- linked property owner (optional)
+  owner_name  TEXT,
+  contact_method TEXT,                               -- whatsapp|phone|email
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(delegate_to, assigned_by);
 
 -- ---- Content ----
@@ -70,6 +74,7 @@ CREATE TABLE IF NOT EXISTS owners (
   last_contact TEXT,
   stage        TEXT DEFAULT 'registered',            -- registered|potential (contacted/pending are derived from last_contact)
   priority     INTEGER DEFAULT 0,
+  community    INTEGER DEFAULT 0,                     -- community member flag
   contact_log  TEXT,                                 -- JSON array of {date,summary,next,by}
   notes        TEXT,
   status       TEXT,
