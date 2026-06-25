@@ -26,12 +26,15 @@ id = "685734c205d14d5e98ccc476d3f90115"
 [vars]
 SESSION_SECRET = "1a3ad50e15e9241c137411d0f3c9f7c9a1eff4ea32af4cd4d5dfa42a8fd6676f"
 
-# --- Phase 2: real-time presence & live chat (enabled) ---
-[[durable_objects.bindings]]
-name = "PRESENCE"
-class_name = "PresenceRoom"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["PresenceRoom"]
+# --- Phase 2: real-time presence & live chat ---
+# Cloudflare build rejected enabling the PresenceRoom Durable Object here
+# (both new_classes and new_sqlite_classes failed at the Pages "Building" step).
+# Needs the build-log error to resolve; re-enable once diagnosed.
+# [[durable_objects.bindings]]
+# name = "PRESENCE"
+# class_name = "PresenceRoom"
+#
+# [[migrations]]
+# tag = "v1"
+# new_sqlite_classes = ["PresenceRoom"]
 
