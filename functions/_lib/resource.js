@@ -111,6 +111,9 @@ export const TASKS = {
     { col: "duration", key: "duration" },
     { col: "notes", key: "notes" },
     { col: "created_by", key: "createdBy" },
+    { col: "owner_id", key: "ownerId" },
+    { col: "owner_name", key: "ownerName" },
+    { col: "contact_method", key: "contactMethod" },
   ],
 };
 
@@ -148,6 +151,7 @@ export const OWNERS = {
     { col: "last_contact", key: "lastContact" },
     { col: "stage", key: "stage" },
     { col: "priority", key: "priority" },
+    { col: "community", key: "community" },
     { col: "contact_log", key: "contactLog", json: true },
     { col: "notes", key: "notes" },
     { col: "status", key: "status" },
