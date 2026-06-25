@@ -321,20 +321,24 @@ function applyTaskStatus(id, status) {
   if (status === "complete" || status === "closed") Object.assign(patch, finalizeTimer(x));
   db.updateTask(id, patch);
 }
-/* Daily recurring tasks: ensure today's instance exists for each series.
-   Yesterday's open instance becomes overdue (Late) but stays open; a fresh
-   task for today is added on top. Deduped by series so multiple devices/users
-   (after sync) don't create duplicates. Returns true if anything changed. */
+/* Daily recurring tasks: self-perpetuating. For each series we look at its
+   LATEST instance — if it's still marked daily and its day has passed, that
+   instance becomes overdue (Late, still open) and a fresh daily instance is
+   created for today on top. The new instance is itself daily, so the chain
+   continues forever until the user sets the latest instance's Repeat to "none"
+   (then latest.repeat !== "daily" and rolling stops). Deduped by series so
+   synced devices don't create duplicates. Returns true if anything changed. */
 function rollRecurringTasks() {
   const today = todayISO();
-  const daily = db.tasks.filter(t => t.repeat === "daily");
-  if (!daily.length) return false;
+  const seriesTasks = db.tasks.filter(t => t.seriesId);   // any instance of a series
+  if (!seriesTasks.length) return false;
   const bySeries = {};
-  daily.forEach(t => { const k = t.seriesId || t.id; (bySeries[k] = bySeries[k] || []).push(t); });
+  seriesTasks.forEach(t => { (bySeries[t.seriesId] = bySeries[t.seriesId] || []).push(t); });
   let changed = false;
   Object.values(bySeries).forEach(list => {
-    list.sort((a, b) => String(b.dueDate || b.date || "").localeCompare(String(a.dueDate || a.date || "")));
+    list.sort((a, b) => String(b.dueDate || b.date || b.createdAt || "").localeCompare(String(a.dueDate || a.date || a.createdAt || "")));
     const latest = list[0];
+    if (latest.repeat !== "daily") return;              // repetition stopped on the newest instance
     const latestDay = latest.dueDate || latest.date || "";
     if (!latestDay || latestDay >= today) return;       // today's instance already exists
     if (latest.status !== "complete" && latest.status !== "closed") {
@@ -344,7 +348,7 @@ function rollRecurringTasks() {
       title: latest.title, description: latest.description, priority: latest.priority,
       assignedBy: latest.assignedBy, delegateTo: latest.delegateTo,
       ownerId: latest.ownerId, ownerName: latest.ownerName, contactMethod: latest.contactMethod,
-      repeat: "daily", seriesId: latest.seriesId || latest.id,
+      repeat: "daily", seriesId: latest.seriesId,
       dueDate: today, date: today, status: "pending",
     });
     changed = true;
