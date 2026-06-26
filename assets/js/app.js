@@ -71,7 +71,7 @@ registerStrings({
     "timer.running": "قيد التشغيل", "timer.tracked": "الوقت المسجّل",
     "timer.locked": "اكتملت المهمة — لا يمكن إضافة وقت",
     "pf.m.hours": "ساعات العمل (هذا الأسبوع)",
-    "field.repeat": "التكرار", "repeat.none": "بدون تكرار", "repeat.daily": "يومياً",
+    "field.repeat": "التكرار", "repeat.none": "بدون تكرار", "repeat.daily": "يومياً", "repeat.weekly": "أسبوعياً", "repeat.monthly": "شهرياً",
   },
   en: {
     "tab.all": "All", "empty.tasks": "No tasks in this tab",
@@ -79,7 +79,7 @@ registerStrings({
     "timer.running": "running", "timer.tracked": "Tracked time",
     "timer.locked": "Task is complete — no time can be added",
     "pf.m.hours": "Work hours (this week)",
-    "field.repeat": "Repeat", "repeat.none": "No repeat", "repeat.daily": "Daily",
+    "field.repeat": "Repeat", "repeat.none": "No repeat", "repeat.daily": "Daily", "repeat.weekly": "Weekly", "repeat.monthly": "Monthly",
   },
 });
 
@@ -321,12 +321,22 @@ function applyTaskStatus(id, status) {
   if (status === "complete" || status === "closed") Object.assign(patch, finalizeTimer(x));
   db.updateTask(id, patch);
 }
-/* Daily recurring tasks: self-perpetuating. For each series we look at its
-   LATEST instance — if it's still marked daily and its day has passed, that
-   instance becomes overdue (Late, still open) and a fresh daily instance is
-   created for today on top. The new instance is itself daily, so the chain
-   continues forever until the user sets the latest instance's Repeat to "none"
-   (then latest.repeat !== "daily" and rolling stops). Deduped by series so
+const REPEATS = ["daily", "weekly", "monthly"];
+/* Has the next occurrence arrived, given the latest instance's day + cadence? */
+function repeatDue(latestDay, repeat, today) {
+  if (!latestDay) return false;
+  const L = new Date(latestDay + "T00:00:00"), T = new Date(today + "T00:00:00");
+  if (isNaN(L) || isNaN(T)) return false;
+  if (repeat === "daily") return T > L;
+  if (repeat === "weekly") return (T - L) >= 7 * 86400000;
+  if (repeat === "monthly") { const n = new Date(L); n.setMonth(n.getMonth() + 1); return T >= n; }
+  return false;
+}
+/* Recurring tasks (daily/weekly/monthly): self-perpetuating. For each series we
+   look at its LATEST instance — if it still repeats and the next occurrence is
+   due, that instance becomes overdue (Late, still open) and a fresh instance is
+   created for today on top, carrying the same cadence. The chain continues until
+   the user sets the latest instance's Repeat to "none". Deduped by series so
    synced devices don't create duplicates. Returns true if anything changed. */
 function rollRecurringTasks() {
   const today = todayISO();
@@ -338,9 +348,9 @@ function rollRecurringTasks() {
   Object.values(bySeries).forEach(list => {
     list.sort((a, b) => String(b.dueDate || b.date || b.createdAt || "").localeCompare(String(a.dueDate || a.date || a.createdAt || "")));
     const latest = list[0];
-    if (latest.repeat !== "daily") return;              // repetition stopped on the newest instance
+    if (!REPEATS.includes(latest.repeat)) return;       // repetition stopped on the newest instance
     const latestDay = latest.dueDate || latest.date || "";
-    if (!latestDay || latestDay >= today) return;       // today's instance already exists
+    if (!repeatDue(latestDay, latest.repeat, today)) return; // next occurrence not due yet
     if (latest.status !== "complete" && latest.status !== "closed") {
       db.updateTask(latest.id, { status: "overdue" });  // missed → Late, still open
     }
@@ -348,7 +358,7 @@ function rollRecurringTasks() {
       title: latest.title, description: latest.description, priority: latest.priority,
       assignedBy: latest.assignedBy, delegateTo: latest.delegateTo,
       ownerId: latest.ownerId, ownerName: latest.ownerName, contactMethod: latest.contactMethod,
-      repeat: "daily", seriesId: latest.seriesId,
+      repeat: latest.repeat, seriesId: latest.seriesId,
       dueDate: today, date: today, status: "pending",
     });
     changed = true;
@@ -415,7 +425,7 @@ function tasksTable(list) {
       ? `<span title="${t("timer.locked")}">🔒</span>`
       : `<button class="btn btn--ghost btn--sm" data-timer="${x.id}" title="${running ? t("timer.stop") : t("timer.start")}">${running ? "⏸" : "▶"}</button>`;
     return `<tr>
-      <td><div class="cell-title">${x.repeat === "daily" ? `<span title="${t("repeat.daily")}">🔁 </span>` : ""}${esc(x.title)}</div><div class="muted">${x.ownerName ? "🏠 " + esc(x.ownerName) + " · " : ""}${esc(x.description || "")}</div></td>
+      <td><div class="cell-title">${(x.repeat && x.repeat !== "none") ? `<span title="${t("repeat." + x.repeat)}">🔁 </span>` : ""}${esc(x.title)}</div><div class="muted">${x.ownerName ? "🏠 " + esc(x.ownerName) + " · " : ""}${esc(x.description || "")}</div></td>
       <td>${priChip(x.priority)}</td>
       <td>${who ? `<span class="flex" style="gap:7px"><span class="avatar-sm">${initials(who)}</span>${esc(who)}</span>` : "—"}</td>
       <td>${fmtDate(x.dueDate)}</td>
@@ -458,7 +468,7 @@ function taskModal(task, prefill) {
         <div class="field"><label>${t("field.dueDate")}</label><input type="date" id="f_due" value="${esc(x.dueDate || "")}" /></div>
         <div class="field"><label>${t("field.duration")}</label><input id="f_dur" placeholder="00:30" value="${esc(x.duration || "")}" /></div>
       </div>
-      <div class="field"><label>🔁 ${t("field.repeat")}</label><select id="f_repeat">${["none","daily"].map(r => opt(r, (x.repeat || "none"), t("repeat." + r))).join("")}</select></div>
+      <div class="field"><label>🔁 ${t("field.repeat")}</label><select id="f_repeat">${["none","daily","weekly","monthly"].map(r => opt(r, (x.repeat || "none"), t("repeat." + r))).join("")}</select></div>
       ${editing ? `<div class="field"><label>⏱️ ${t("timer.tracked")}</label><input value="${fmtDur(taskTotalSeconds(x))}${taskRunning(x) ? " · " + t("timer.running") : ""}" disabled /></div>` : ""}
       <div class="field-row">
         <div class="field"><label>${t("task.owner")}</label><select id="f_owner" ${lockOwner ? "disabled" : ""}>
@@ -489,8 +499,8 @@ function taskModal(task, prefill) {
       repeat: $("#f_repeat").value,
     };
     if (!data.title) { $("#f_title").focus(); return; }
-    // recurring daily tasks: tag a series + default the due date to today
-    if (data.repeat === "daily") {
+    // recurring tasks: tag a series + default the due date to today
+    if (data.repeat && data.repeat !== "none") {
       data.seriesId = (editing && task.seriesId) ? task.seriesId : ("ser" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
       if (!data.dueDate) data.dueDate = todayISO();
     }
