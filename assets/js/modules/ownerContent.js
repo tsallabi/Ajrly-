@@ -122,6 +122,9 @@ function cellInput(field, p) {
     return `<span class="oc-timelabel" style="cursor:pointer;display:inline-block;min-width:40px;text-align:center;padding:4px 2px;font-size:13px">${esc(shown) || "⏰"}</span>` +
       `<span class="oc-timeedit flex" style="display:none;gap:4px;align-items:center;justify-content:center">${hSel}<b>:</b>${mSel}</span>`;
   }
+  if (field === "caption") {
+    return `<textarea class="oc-cell oc-cap" data-f="caption" rows="2" ${ro} style="resize:vertical;min-height:38px;overflow:hidden;white-space:pre-wrap;line-height:1.4">${esc(v)}</textarea>`;
+  }
   return `<input class="oc-cell" data-f="${field}" value="${esc(v)}" ${ro} />`;
 }
 /* read all editable cells of a row into a post object (including the time selects) */
@@ -340,6 +343,11 @@ function mount(ctx) {
 
   const body = $("#ocBody");
   if (!body) return;
+
+  // caption textareas auto-grow to show the whole text
+  const autosize = (ta) => { ta.style.height = "auto"; ta.style.height = (ta.scrollHeight + 2) + "px"; };
+  body.querySelectorAll(".oc-cap").forEach(autosize);
+  body.addEventListener("input", (e) => { const ta = e.target.closest && e.target.closest(".oc-cap"); if (ta) autosize(ta); });
 
   // inline edit: existing rows update in place; blank rows become real on first entry
   body.addEventListener("change", (e) => {
