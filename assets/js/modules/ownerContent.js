@@ -27,6 +27,7 @@ registerStrings({
     "oc.confirmDel": "حذف هذا الصف؟", "oc.saved": "تم الحفظ", "oc.deleted": "تم الحذف",
     "oc.noLinks": "لا روابط بعد — اضغط تعديل الروابط",
     "oc.filterBy": "تصفية حسب الفكرة:", "oc.allIdeas": "كل الأفكار",
+    "oc.tab.grid": "الجدول", "oc.tab.calendar": "التقويم",
   },
   en: {
     "nav.oc": "Owner Content",
@@ -45,6 +46,7 @@ registerStrings({
     "oc.confirmDel": "Delete this row?", "oc.saved": "Saved", "oc.deleted": "Deleted",
     "oc.noLinks": "No links yet — click Edit links",
     "oc.filterBy": "Filter by idea:", "oc.allIdeas": "All ideas",
+    "oc.tab.grid": "Grid", "oc.tab.calendar": "Calendar",
   },
 });
 
@@ -62,6 +64,8 @@ const COLS = ["day", "date", "goal", "postTo", "idea", "type", "caption", "pubTi
 const DROPDOWNS = { goal: 1, postTo: 1, idea: 1, type: 1 };
 const N_BLANK = 7;
 let ocFilterIdea = "";   // "" = all ideas
+let ocView = "grid";     // grid | calendar
+let calOff = 0;          // month offset for the calendar tab
 
 /* deterministic translucent colour for a value (readable in both themes) */
 function colorFor(v) {
@@ -141,6 +145,51 @@ function headerCell(f) {
   return `<th style="white-space:nowrap">${esc(t("oc.f." + f))}${pencil}</th>`;
 }
 
+/* ---------------- calendar tab ---------------- */
+function calendarView() {
+  const now = new Date();
+  const base = new Date(now.getFullYear(), now.getMonth() + calOff, 1);
+  const year = base.getFullYear(), month = base.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startDow = base.getDay();
+  const lang = getLang() === "ar" ? "ar-EG" : "en-GB";
+  const dows = (getLang() === "ar")
+    ? ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"]
+    : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const ym = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const byDay = {};
+  posts().forEach(p => {
+    const d = String(p.date || "");
+    if (d.slice(0, 7) === ym) { const dom = parseInt(d.slice(8, 10), 10); (byDay[dom] = byDay[dom] || []).push(p); }
+  });
+  const total = Object.values(byDay).reduce((n, a) => n + a.length, 0);
+  const head = dows.map(d => `<div style="text-align:center;font-size:11px;color:var(--muted,#94a3b8);padding:4px 0">${d}</div>`).join("");
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push("<div></div>");
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday = (calOff === 0 && d === now.getDate());
+    const items = (byDay[d] || []).map(p => {
+      const label = esc(p.idea || p.type || p.caption || "•");
+      const tip = esc([p.postTo, p.type, p.caption].filter(Boolean).join(" · "));
+      return `<div title="${tip}" style="font-size:10.5px;background:${colorFor(p.idea)};border-radius:5px;padding:2px 5px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</div>`;
+    }).join("");
+    cells.push(`<div style="min-height:96px;border:1px solid var(--border);border-radius:9px;padding:5px;background:var(--surface);${isToday ? "box-shadow:0 0 0 2px var(--brand) inset" : ""}">
+      <div style="font-size:11px;color:var(--muted,#94a3b8);font-weight:600">${d}</div>${items}</div>`);
+  }
+  const title = base.toLocaleDateString(lang, { month: "long", year: "numeric" });
+  return `<div class="card">
+    <div class="flex between" style="align-items:center;margin-bottom:12px">
+      <span class="card__title">📆 ${esc(title)}${total ? ` <span class="muted" style="font-size:12px">· ${total}</span>` : ""}</span>
+      <span class="flex" style="gap:4px">
+        <button class="btn btn--ghost btn--sm" data-ccnav="prev">‹</button>
+        <button class="btn btn--sm" data-ccnav="today">${getLang() === "ar" ? "اليوم" : "Today"}</button>
+        <button class="btn btn--ghost btn--sm" data-ccnav="next">›</button>
+      </span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">${head}${cells.join("")}</div>
+  </div>`;
+}
+
 function view() {
   const style = `<style>
     table.oc-grid td { padding:4px 6px; vertical-align:middle }
@@ -148,6 +197,12 @@ function view() {
     .oc-cell:focus { outline:2px solid var(--brand); outline-offset:-1px }
     table.oc-grid td:nth-child(7) .oc-cell { min-width:200px }
   </style>`;
+  const tabs = `<div class="seg" id="ocTabs" style="margin-bottom:14px">
+    <button data-ocview="grid" class="${ocView === "grid" ? "active" : ""}">🗓️ ${esc(t("oc.tab.grid"))}</button>
+    <button data-ocview="calendar" class="${ocView === "calendar" ? "active" : ""}">📆 ${esc(t("oc.tab.calendar"))}</button>
+  </div>`;
+  if (ocView === "calendar") return `<div>${tabs}${linksBar()}${calendarView()}</div>`;
+
   const filterSel = `<div class="toolbar"><div class="toolbar__left">
     <span class="muted">${esc(t("oc.filterBy"))}</span>
     <select class="input" id="ocFilter"><option value="">${esc(t("oc.allIdeas"))}</option>${optionsFor("idea").map(o => `<option ${ocFilterIdea === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>
@@ -156,7 +211,7 @@ function view() {
   // blank rows only when not filtering (so you can keep adding)
   const blanks = (W() && !ocFilterIdea) ? Array.from({ length: N_BLANK }).map(() => rowHTML(null)).join("") : "";
   const body = list.map(rowHTML).join("") + blanks;
-  return `<div>${style}${linksBar()}${filterSel}
+  return `<div>${style}${tabs}${linksBar()}${filterSel}
     <div class="table-wrap"><table class="oc-grid">
       <thead><tr>${COLS.map(headerCell).join("")}<th>📎</th><th></th></tr></thead>
       <tbody id="ocBody">${body}</tbody>
@@ -248,6 +303,12 @@ function linksEditor() {
 /* ---------------- mount (inline grid editing) ---------------- */
 function mount(ctx) {
   const reRender = () => (ctx && ctx.render ? ctx.render() : (OS().render && OS().render()));
+  // tab switch (grid / calendar) + calendar month nav — bind first (work in both views)
+  $$("[data-ocview]").forEach(b => b.onclick = () => { ocView = b.dataset.ocview; reRender(); });
+  $$("[data-ccnav]").forEach(b => b.onclick = () => {
+    const d = b.dataset.ccnav; if (d === "prev") calOff -= 1; else if (d === "next") calOff += 1; else calOff = 0;
+    reRender();
+  });
   const el = $("#ocEditLinks"); if (el) el.onclick = () => linksEditor();
   $$(".oc-opt").forEach(b => b.onclick = () => optionEditor(b.dataset.f, reRender));
   const flt = $("#ocFilter"); if (flt) flt.onchange = (e) => { ocFilterIdea = e.target.value; reRender(); };
