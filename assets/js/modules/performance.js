@@ -317,7 +317,6 @@ function metricRow(label, value) {
 function employeeCard(u) {
   const pct = (v) => (v == null ? na() : nf(v) + "%");
   const num = (v) => (v == null ? na() : nf(v));
-  const resp = u.avgFirstResponse == null ? na() : `${nf(u.avgFirstResponse)} ${esc(t("pf.m.min"))}`;
   const perDay = u.tasksPerDay == null ? na() : nf(u.tasksPerDay);
   return `<div class="card pf-card">
     <div class="pf-card__head">
@@ -337,8 +336,6 @@ function employeeCard(u) {
       ${metricRow(t("pf.m.done"), num(u.tasksDone))}
       ${metricRow(t("pf.m.hours"), weekHoursOf(u.name) ? nf(weekHoursOf(u.name)) : na())}
       ${metricRow(t("pf.m.active"), num(u.activeMinutes))}
-      ${metricRow(t("pf.m.firstResp"), resp)}
-      ${metricRow(t("pf.m.tickets"), num(u.ticketsResolved))}
     </div>
     <div class="pf-heat-wrap">
       <span class="muted pf-heat-cap">${esc(t("pf.heatmap"))}</span>
