@@ -105,6 +105,31 @@ CREATE TABLE IF NOT EXISTS finance (
 );
 CREATE INDEX IF NOT EXISTS idx_finance_kind ON finance(kind, date);
 
+-- ---- Owner content calendar (posts + editable dropdown options/links) ----
+CREATE TABLE IF NOT EXISTS content_posts (
+  id              TEXT PRIMARY KEY,
+  day             TEXT,
+  date            TEXT,
+  goal            TEXT,
+  post_to         TEXT,
+  idea            TEXT,
+  type            TEXT,
+  caption         TEXT,
+  pub_time        TEXT,
+  attachment      TEXT,                              -- data URL or link to the asset
+  attachment_name TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS content_opts (
+  id         TEXT PRIMARY KEY,
+  field      TEXT,                                   -- goal|postTo|idea|type|link
+  value      TEXT,                                   -- option text (or link label)
+  url        TEXT,                                   -- link URL (for field='link')
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ---- Activity days (per-user attendance for the monthly calendar) ----
 CREATE TABLE IF NOT EXISTS activity_days (
   id         TEXT PRIMARY KEY,

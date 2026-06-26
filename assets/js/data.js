@@ -39,6 +39,10 @@ const seedAssets = [];
 /* ---- Seed: Activity days (per-user attendance), starts empty ---- */
 const seedActivity = [];
 
+/* ---- Seed: Owner content calendar (posts + editable dropdown options) ---- */
+const seedContentPosts = [];
+const seedContentOpts = [];
+
 /* ---- Static reference: Content pillars (from Pillar matrix) ---- */
 export const PILLARS = [
   { name: "Property Discovery", sub: "Core Product", icon: "🔍", purpose: "Help renters discover properties and inspire bookings." },
@@ -72,7 +76,7 @@ export const LINKS = [
 ];
 
 /* ---- Store ---- */
-const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets, activity: seedActivity });
+const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets, activity: seedActivity, contentPosts: seedContentPosts, contentOpts: seedContentOpts });
 
 let state = load();
 
@@ -125,6 +129,16 @@ export const db = {
 
   get activity() { return state.activity; },
   addActivity(a) { state.activity.unshift({ ...a, id: uid("ac") }); persist(); },
+
+  get contentPosts() { return state.contentPosts; },
+  addContentPost(p) { state.contentPosts.unshift({ ...p, id: uid("cp") }); persist(); },
+  updateContentPost(id, patch) { state.contentPosts = state.contentPosts.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
+  removeContentPost(id) { state.contentPosts = state.contentPosts.filter(x => x.id !== id); persist(); },
+
+  get contentOpts() { return state.contentOpts; },
+  addContentOpt(o) { state.contentOpts.unshift({ ...o, id: uid("co") }); persist(); },
+  updateContentOpt(id, patch) { state.contentOpts = state.contentOpts.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
+  removeContentOpt(id) { state.contentOpts = state.contentOpts.filter(x => x.id !== id); persist(); },
 
   reset() { state = defaultState(); persist(); },
   exportJSON() { return JSON.stringify(state, null, 2); },

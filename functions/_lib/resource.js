@@ -168,6 +168,35 @@ export const ASSET_FOLDERS = {
   ],
 };
 
+export const CONTENT_POSTS = {
+  table: "content_posts",
+  prefix: "cp",
+  order: "created_at DESC",
+  fields: [
+    { col: "day", key: "day" },
+    { col: "date", key: "date" },
+    { col: "goal", key: "goal" },
+    { col: "post_to", key: "postTo" },
+    { col: "idea", key: "idea" },
+    { col: "type", key: "type" },
+    { col: "caption", key: "caption" },
+    { col: "pub_time", key: "pubTime" },
+    { col: "attachment", key: "attachment" },
+    { col: "attachment_name", key: "attachmentName" },
+  ],
+};
+
+export const CONTENT_OPTS = {
+  table: "content_opts",
+  prefix: "co",
+  order: "created_at ASC",
+  fields: [
+    { col: "field", key: "field" },
+    { col: "value", key: "value" },
+    { col: "url", key: "url" },
+  ],
+};
+
 export const ACTIVITY = {
   table: "activity_days",
   prefix: "ac",

@@ -30,6 +30,7 @@ function persistSnapshot(db) {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       tasks: db.tasks, content: db.content, owners: db.owners, finance: db.finance,
       assetFolders: db.assetFolders, assets: db.assets, activity: db.activity,
+      contentPosts: db.contentPosts, contentOpts: db.contentOpts,
     }));
   } catch (_) { /* ignore quota/availability */ }
 }
@@ -49,6 +50,8 @@ export async function hydrateFromCloud(db) {
   if (Array.isArray(data.assetFolders)) replaceInPlace(db.assetFolders, data.assetFolders);
   if (Array.isArray(data.assets)) replaceInPlace(db.assets, data.assets);
   if (Array.isArray(data.activity)) replaceInPlace(db.activity, data.activity);
+  if (Array.isArray(data.contentPosts)) replaceInPlace(db.contentPosts, data.contentPosts);
+  if (Array.isArray(data.contentOpts)) replaceInPlace(db.contentOpts, data.contentOpts);
   persistSnapshot(db);
   return data;
 }
@@ -150,6 +153,24 @@ export function wireWriteThrough(db, onError) {
     const local = newest(db.activity);
     cloud.createActivity(a).then((row) => mergeServerRow(db.activity, local && local.id, row)).catch(report);
   });
+
+  wrap("addContentPost", (p) => {
+    const local = newest(db.contentPosts);
+    cloud.createContentPost(p).then((row) => mergeServerRow(db.contentPosts, local && local.id, row)).catch(report);
+  });
+  wrap("updateContentPost", (id, patch) => {
+    cloud.updateContentPost(id, patch).then((row) => mergeServerRow(db.contentPosts, id, row)).catch(report);
+  });
+  wrap("removeContentPost", (id) => { cloud.removeContentPost(id).catch(report); });
+
+  wrap("addContentOpt", (o) => {
+    const local = newest(db.contentOpts);
+    cloud.createContentOpt(o).then((row) => mergeServerRow(db.contentOpts, local && local.id, row)).catch(report);
+  });
+  wrap("updateContentOpt", (id, patch) => {
+    cloud.updateContentOpt(id, patch).then((row) => mergeServerRow(db.contentOpts, id, row)).catch(report);
+  });
+  wrap("removeContentOpt", (id) => { cloud.removeContentOpt(id).catch(report); });
 
   try { Object.defineProperty(db, "__cloudWired", { value: true, enumerable: false }); } catch (_) {}
   return true;
