@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS finance (
   currency        TEXT DEFAULT 'LYD',                -- LYD|USD|EUR|EGP
   rate            TEXT,                              -- manual exchange rate to USD (USD per 1 unit)
   category        TEXT,
+  paid_to         TEXT,                              -- recipient the money was sent to (expenses)
   description     TEXT,
   attachment      TEXT,                              -- data URL of receipt (image/pdf)
   attachment_name TEXT,

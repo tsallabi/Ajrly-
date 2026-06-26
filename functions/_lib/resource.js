@@ -153,6 +153,7 @@ export const FINANCE = {
     { col: "currency", key: "currency" },
     { col: "rate", key: "rate" },
     { col: "category", key: "category" },
+    { col: "paid_to", key: "paidTo" },
     { col: "description", key: "description" },
     { col: "attachment", key: "attachment" },
     { col: "attachment_name", key: "attachmentName" },
