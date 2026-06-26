@@ -40,6 +40,9 @@ registerStrings({
     "fin.f.attachment": "إيصال / مرفق (PDF أو JPG)",
     "fin.attach.pick": "إرفاق ملف",
     "fin.attach.view": "عرض",
+    "fin.preview.newtab": "فتح في تبويب جديد",
+    "fin.preview.download": "تنزيل",
+    "fin.preview.none": "لا يمكن معاينة هذا الملف — افتحه في تبويب جديد",
     "fin.attach.remove": "إزالة المرفق",
     "fin.attach.too_big": "الملف كبير جداً (الحد الأقصى 1.5 ميجابايت)",
     "fin.attach.bad_type": "الصيغ المسموحة: PDF أو JPG/PNG",
@@ -95,6 +98,9 @@ registerStrings({
     "fin.f.attachment": "Receipt / attachment (PDF or JPG)",
     "fin.attach.pick": "Attach file",
     "fin.attach.view": "View",
+    "fin.preview.newtab": "Open in new tab",
+    "fin.preview.download": "Download",
+    "fin.preview.none": "Can't preview this file — open it in a new tab",
     "fin.attach.remove": "Remove attachment",
     "fin.attach.too_big": "File is too large (max 1.5 MB)",
     "fin.attach.bad_type": "Allowed: PDF or JPG/PNG",
@@ -356,7 +362,7 @@ function table() {
   const D = can("del");
   const rows = list.map(r => {
     const att = r.attachment
-      ? `<a href="${esc(r.attachment)}" target="_blank" rel="noopener" download="${esc(r.attachmentName || "receipt")}">📎 ${esc(r.attachmentName || t("fin.attach.view"))}</a>`
+      ? `<button class="btn btn--ghost btn--sm" data-fview="${r.id}">📎 ${esc(r.attachmentName || t("fin.attach.view"))}</button>`
       : "—";
     return `<tr>
       <td><div class="cell-title">${esc(r.name || "—")}</div></td>
@@ -429,6 +435,32 @@ function view() {
   return `<div>${chartCard()}${summaryCards()}${toolbar}${table()}${settingsCard()}</div>`;
 }
 
+/* ---------------- attachment preview ---------------- */
+const isImgAtt = (src, name) => /^data:image\//i.test(src || "") || /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(name || "") || /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(src || "");
+const isPdfAtt = (src, name) => /^data:application\/pdf/i.test(src || "") || /\.pdf(\?|$)/i.test(name || "") || /\.pdf(\?|$)/i.test(src || "");
+function previewModal(id) {
+  const r = records().find(x => x.id === id);
+  if (!r || !r.attachment) return;
+  const src = r.attachment, name = r.attachmentName || "receipt";
+  let body;
+  if (isImgAtt(src, name)) {
+    body = `<img src="${esc(src)}" alt="${esc(name)}" style="max-width:100%;max-height:72vh;display:block;margin:0 auto;border-radius:8px" />`;
+  } else if (isPdfAtt(src, name)) {
+    body = `<iframe src="${esc(src)}" title="${esc(name)}" style="width:100%;height:72vh;border:1px solid var(--border);border-radius:8px"></iframe>`;
+  } else {
+    body = `<p class="muted">${esc(t("fin.preview.none"))}</p>`;
+  }
+  OS().openModal(`
+    <div class="modal__head"><h3>📎 ${esc(name)}</h3><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal__body" style="min-width:min(78vw,720px)">${body}</div>
+    <div class="modal__foot">
+      <a class="btn" href="${esc(src)}" target="_blank" rel="noopener">↗ ${esc(t("fin.preview.newtab"))}</a>
+      <a class="btn" href="${esc(src)}" download="${esc(name)}">⬇ ${esc(t("fin.preview.download"))}</a>
+      <button class="btn btn--primary" data-close>${esc(t("btn.close") || "Close")}</button>
+    </div>`);
+  $$("[data-close]").forEach(b => b.onclick = OS().closeModal);
+}
+
 /* ---------------- modal ---------------- */
 function financeModal(rec) {
   const x = rec || {};
@@ -481,7 +513,7 @@ function financeModal(rec) {
     if (!box) return;
     box.innerHTML = att
       ? `<span class="flex" style="gap:8px;align-items:center">
-           <a href="${esc(att.data)}" target="_blank" rel="noopener" download="${esc(att.name)}">📎 ${esc(att.name)}</a>
+           <a href="${esc(att.data)}" target="_blank" rel="noopener">📎 ${esc(att.name)}</a>
            <button type="button" class="btn btn--ghost btn--sm btn--danger" id="fin_att_rm">${esc(t("fin.attach.remove"))}</button>
          </span>`
       : "";
@@ -570,6 +602,7 @@ function mount(ctx) {
   });
   const add = $("#finAdd");
   if (add) add.onclick = () => financeModal(null);
+  $$("[data-fview]").forEach(b => b.onclick = () => previewModal(b.dataset.fview));
   $$("[data-fedit]").forEach(b => b.onclick = () => financeModal(records().find(r => r.id === b.dataset.fedit)));
   $$("[data-fdel]").forEach(b => b.onclick = () => {
     if (!confirm(t("fin.confirmDel"))) return;

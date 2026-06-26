@@ -8,15 +8,15 @@ import { currentUser, hasUsers, login, register, logout, can, teamNames } from "
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=55";
-import "./modules/ownerContent.js?v=55";
-import "./modules/assets.js?v=55";
-import "./modules/account.js?v=55";
-import "./modules/team.js?v=55";
-import "./modules/performance.js?v=55";
+import "./modules/finance.js?v=56";
+import "./modules/ownerContent.js?v=56";
+import "./modules/assets.js?v=56";
+import "./modules/account.js?v=56";
+import "./modules/team.js?v=56";
+import "./modules/performance.js?v=56";
 import cloud from "./cloud.js";
 import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js";
-import AjrlyPresence from "./presence.js?v=55"; // also sets window.AjrlyPresence
+import AjrlyPresence from "./presence.js?v=56"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
