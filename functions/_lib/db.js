@@ -4,20 +4,25 @@
    parameterized binds — never string-concatenate user input into SQL.
    ============================================================ */
 
+import { ensureSchema } from "./schema.js";
+
 /* Return all matching rows as plain objects. */
 export async function all(env, sql, ...binds) {
+  await ensureSchema(env); // self-heal: create any missing tables on first use
   const res = await env.DB.prepare(sql).bind(...binds).all();
   return res.results || [];
 }
 
 /* Return the first matching row, or null. */
 export async function first(env, sql, ...binds) {
+  await ensureSchema(env);
   const row = await env.DB.prepare(sql).bind(...binds).first();
   return row || null;
 }
 
 /* Execute a write (INSERT/UPDATE/DELETE). Returns D1 meta. */
 export async function run(env, sql, ...binds) {
+  await ensureSchema(env);
   const res = await env.DB.prepare(sql).bind(...binds).run();
   return res;
 }
