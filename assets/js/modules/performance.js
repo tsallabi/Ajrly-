@@ -95,6 +95,7 @@ let fTo = "";           // ISO date
 let cache = null;       // last fetched/computed { users, generatedAt, local }
 let loading = false;
 let weekHoursMap = {};  // { memberName: seconds } accumulated this week (from task timers)
+let calOffset = 0;      // months back from the current month for the attendance calendar (0 = this month)
 
 /* ---------------- helpers ---------------- */
 const OS = () => window.AjrlyOS || {};
@@ -360,7 +361,11 @@ function activeDaysFor(u) {
 function monthlyCalendar(u) {
   const active = activeDaysFor(u);
   const now = new Date();
-  const year = now.getFullYear(), month = now.getMonth(), todayD = now.getDate();
+  // base month = current month shifted back by calOffset (data from any month is kept)
+  const base = new Date(now.getFullYear(), now.getMonth() + calOffset, 1);
+  const year = base.getFullYear(), month = base.getMonth();
+  const isCurrentMonth = (year === now.getFullYear() && month === now.getMonth());
+  const todayD = isCurrentMonth ? now.getDate() : -1;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const startDow = new Date(year, month, 1).getDay(); // 0=Sun
   const dows = (getLang() === "ar")
@@ -380,8 +385,13 @@ function monthlyCalendar(u) {
     const ring = isToday ? "box-shadow:0 0 0 2px var(--brand) inset;" : "";
     cells.push(cell(String(d), ring + style));
   }
-  const title = now.toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-GB", { month: "long", year: "numeric" });
-  return `<span class="muted pf-heat-cap">📅 ${esc(t("pf.calendar"))} — ${esc(title)}</span>
+  const title = base.toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-GB", { month: "long", year: "numeric" });
+  const navBtn = (dir, label, disabled) => `<button class="btn btn--ghost btn--sm" data-cal="${dir}" ${disabled ? "disabled style=\"opacity:.4\"" : ""} style="padding:0 6px;min-width:0">${label}</button>`;
+  const header = `<div class="flex between" style="align-items:center;margin-bottom:2px">
+    <span class="muted pf-heat-cap">📅 ${esc(title)}</span>
+    <span class="flex" style="gap:2px">${navBtn("prev", "‹", false)}${navBtn("next", "›", calOffset >= 0)}</span>
+  </div>`;
+  return `${header}
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:6px">${head}${cells.join("")}</div>`;
 }
 function initials(name) {
@@ -491,6 +501,12 @@ function mount(ctx) {
   if (reset) reset.onclick = () => { fMember = ""; fFrom = ""; fTo = ""; cache = null; ensureData(reRender); };
   const refresh = $("#pf_refresh");
   if (refresh) refresh.onclick = () => { cache = null; ensureData(reRender); };
+  // attendance calendar month navigation (shared across all cards)
+  document.querySelectorAll("[data-cal]").forEach(b => b.onclick = () => {
+    if (b.dataset.cal === "prev") calOffset -= 1;
+    else if (calOffset < 0) calOffset += 1;
+    reRender();
+  });
 }
 
 /* ---------------- register ---------------- */
