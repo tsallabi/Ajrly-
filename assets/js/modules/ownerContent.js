@@ -73,7 +73,8 @@ function colorFor(v) {
   let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return `hsla(${h % 360},65%,55%,0.20)`;
 }
-const weekdayName = (iso) => { try { return new Date(iso + "T00:00:00").toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-GB", { weekday: "long" }); } catch (_) { return ""; } };
+const weekdayName = (iso) => { try { return new Date(iso + "T00:00:00").toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-GB", { weekday: "short" }); } catch (_) { return ""; } };
+const fmtDM = (iso) => { const p = String(iso || "").split("-"); return p.length === 3 ? `${+p[2]}/${+p[1]}` : ""; };
 
 const DEFAULTS = {
   goal: ["زيادة الثقة", "زيادة الوعي بالخدمات", "تثقيف العميل", "زيادة التفاعل", "بناء المجتمع"],
@@ -103,7 +104,8 @@ const W = () => can("write");
 function cellInput(field, p) {
   const v = (p && p[field]) || "";
   const ro = W() ? "" : "disabled";
-  if (field === "date") return `<input type="date" class="oc-cell" data-f="date" value="${esc(v)}" ${ro} />`;
+  if (field === "day") return `<input class="oc-cell" data-f="day" value="${esc(v)}" ${ro} style="width:58px;min-width:48px;text-align:center" />`;
+  if (field === "date") return `<span class="oc-datelabel" title="${esc(v)}" style="cursor:pointer;display:inline-block;min-width:42px;text-align:center;padding:6px 4px">${esc(fmtDM(v)) || "📅"}</span><input type="date" class="oc-cell oc-datein" data-f="date" value="${esc(v)}" style="display:none" ${ro} />`;
   if (DROPDOWNS[field]) {
     const opts = ["<option value=\"\"></option>"].concat(optionsFor(field).map(o => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`)).join("");
     const tint = v ? ` style="background:${colorFor(v)}"` : "";
@@ -193,9 +195,12 @@ function calendarView() {
 function view() {
   const style = `<style>
     table.oc-grid td { padding:4px 6px; vertical-align:middle }
-    .oc-cell { width:100%; min-width:96px; box-sizing:border-box; border:1px solid var(--border); border-radius:6px; padding:6px 8px; background:var(--surface); color:var(--text); font:inherit }
+    .oc-cell { width:100%; min-width:120px; box-sizing:border-box; border:1px solid var(--border); border-radius:6px; padding:6px 8px; background:var(--surface); color:var(--text); font:inherit }
     .oc-cell:focus { outline:2px solid var(--brand); outline-offset:-1px }
-    table.oc-grid td:nth-child(7) .oc-cell { min-width:200px }
+    table.oc-grid td:nth-child(1) { width:60px }   /* day — narrow */
+    table.oc-grid td:nth-child(2) { width:58px }   /* date — narrow */
+    table.oc-grid td:nth-child(7) .oc-cell { min-width:300px }  /* caption — roomy */
+    table.oc-grid td:nth-child(5) .oc-cell { min-width:170px }  /* content idea */
   </style>`;
   const tabs = `<div class="seg" id="ocTabs" style="margin-bottom:14px">
     <button data-ocview="grid" class="${ocView === "grid" ? "active" : ""}">🗓️ ${esc(t("oc.tab.grid"))}</button>
@@ -321,12 +326,13 @@ function mount(ctx) {
     const cell = e.target.closest("[data-f]"); if (!cell) return;
     const tr = cell.closest("tr"); const field = cell.dataset.f; const val = cell.value;
     if (cell.tagName === "SELECT") cell.style.background = colorFor(val);  // recolour chip
-    // picking a date auto-fills the weekday in the Day cell
+    // picking a date: show compact d/m label, hide the picker, auto-fill the weekday
     let extra = null;
-    if (field === "date" && val) {
-      const wd = weekdayName(val);
-      const dayCell = tr.querySelector('[data-f="day"]'); if (dayCell) dayCell.value = wd;
-      extra = { day: wd };
+    if (field === "date") {
+      const lbl = tr.querySelector(".oc-datelabel");
+      if (lbl) { lbl.textContent = fmtDM(val) || "📅"; lbl.style.display = ""; }
+      cell.style.display = "none";
+      if (val) { const wd = weekdayName(val); const dayCell = tr.querySelector('[data-f="day"]'); if (dayCell) dayCell.value = wd; extra = { day: wd }; }
     }
     if (tr.dataset.id) {
       const patch = { [field]: val }; if (extra) Object.assign(patch, extra);
@@ -344,8 +350,24 @@ function mount(ctx) {
     if (!body.querySelector("tr[data-draft]")) { for (let i = 0; i < 3; i++) body.insertAdjacentHTML("beforeend", rowHTML(null)); }
   });
 
+  // revert the date picker back to its compact label when it loses focus
+  body.addEventListener("focusout", (e) => {
+    const inp = e.target.closest && e.target.closest(".oc-datein"); if (!inp) return;
+    const lbl = inp.parentNode.querySelector(".oc-datelabel");
+    if (lbl) { lbl.textContent = fmtDM(inp.value) || "📅"; lbl.style.display = ""; }
+    inp.style.display = "none";
+  });
+
   body.addEventListener("click", (e) => {
     const tr = e.target.closest("tr"); if (!tr) return;
+    // click the compact date label → reveal the date picker
+    const lbl = e.target.closest(".oc-datelabel");
+    if (lbl && W()) {
+      const inp = lbl.parentNode.querySelector(".oc-datein");
+      lbl.style.display = "none"; inp.style.display = ""; inp.focus();
+      if (inp.showPicker) { try { inp.showPicker(); } catch (_) {} }
+      return;
+    }
     if (e.target.closest(".oc-del")) {
       if (!tr.dataset.id) return;
       if (!confirm(t("oc.confirmDel"))) return;
