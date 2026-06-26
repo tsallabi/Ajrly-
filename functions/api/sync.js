@@ -5,7 +5,7 @@
 import { json, unauthorized, serverError, noContent } from "../_lib/response.js";
 import { all } from "../_lib/db.js";
 import { getUser } from "../_lib/auth.js";
-import { listResource, TASKS, CONTENT, OWNERS, FINANCE, ASSET_FOLDERS, ASSETS, ACTIVITY } from "../_lib/resource.js";
+import { listResource, TASKS, CONTENT, OWNERS, FINANCE, ASSET_FOLDERS, ASSETS, ACTIVITY, CONTENT_POSTS, CONTENT_OPTS } from "../_lib/resource.js";
 
 export function onRequestOptions() { return noContent(); }
 
@@ -34,6 +34,8 @@ export async function onRequestGet(context) {
       listResource(env, ASSET_FOLDERS).then((r) => { out.assetFolders = r; }).catch(() => {}),
       listResource(env, ASSETS).then((r) => { out.assets = r; }).catch(() => {}),
       listResource(env, ACTIVITY).then((r) => { out.activity = r; }).catch(() => {}),
+      listResource(env, CONTENT_POSTS).then((r) => { out.contentPosts = r; }).catch(() => {}),
+      listResource(env, CONTENT_OPTS).then((r) => { out.contentOpts = r; }).catch(() => {}),
     ]);
 
     return json(out);

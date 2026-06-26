@@ -125,6 +125,8 @@ export async function pull() {
     assetFolders: data.assetFolders,
     assets: data.assets,
     activity: data.activity,
+    contentPosts: data.contentPosts,
+    contentOpts: data.contentOpts,
     users: data.users || [],
     ts: data.ts || Date.now(),
   };
@@ -151,6 +153,8 @@ const _finance = makeCrud("finance");
 const _assetFolders = makeCrud("assets/folders");
 const _assets = makeCrud("assets");
 const _activity = makeCrud("activity");
+const _contentPosts = makeCrud("content-posts");
+const _contentOpts = makeCrud("content-opts");
 
 /* Tasks */
 export const createTask = (p) => _tasks.create(p);
@@ -177,6 +181,13 @@ export const updateAsset = (id, p) => _assets.update(id, p);
 export const removeAsset = (id) => _assets.remove(id);
 /* Activity (attendance days) — create only */
 export const createActivity = (p) => _activity.create(p);
+/* Owner content calendar — posts + editable options/links */
+export const createContentPost = (p) => _contentPosts.create(p);
+export const updateContentPost = (id, p) => _contentPosts.update(id, p);
+export const removeContentPost = (id) => _contentPosts.remove(id);
+export const createContentOpt = (p) => _contentOpts.create(p);
+export const updateContentOpt = (id, p) => _contentOpts.update(id, p);
+export const removeContentOpt = (id) => _contentOpts.remove(id);
 
 /* Clean default export for ergonomic importing. */
 const cloud = {
@@ -192,5 +203,7 @@ const cloud = {
   createAssetFolder, updateAssetFolder, removeAssetFolder,
   createAsset, updateAsset, removeAsset,
   createActivity,
+  createContentPost, updateContentPost, removeContentPost,
+  createContentOpt, updateContentOpt, removeContentOpt,
 };
 export default cloud;
