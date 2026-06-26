@@ -26,6 +26,7 @@ registerStrings({
     "oc.link.label": "الاسم", "oc.link.url": "الرابط", "oc.link.add": "إضافة رابط",
     "oc.confirmDel": "حذف هذا الصف؟", "oc.saved": "تم الحفظ", "oc.deleted": "تم الحذف",
     "oc.noLinks": "لا روابط بعد — اضغط تعديل الروابط",
+    "oc.filterBy": "تصفية حسب الفكرة:", "oc.allIdeas": "كل الأفكار",
   },
   en: {
     "nav.oc": "Owner Content",
@@ -43,6 +44,7 @@ registerStrings({
     "oc.link.label": "Name", "oc.link.url": "URL", "oc.link.add": "Add link",
     "oc.confirmDel": "Delete this row?", "oc.saved": "Saved", "oc.deleted": "Deleted",
     "oc.noLinks": "No links yet — click Edit links",
+    "oc.filterBy": "Filter by idea:", "oc.allIdeas": "All ideas",
   },
 });
 
@@ -58,7 +60,16 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const MAX_ATT = 1.5 * 1024 * 1024;
 const COLS = ["day", "date", "goal", "postTo", "idea", "type", "caption", "pubTime"];
 const DROPDOWNS = { goal: 1, postTo: 1, idea: 1, type: 1 };
-const N_BLANK = 4;
+const N_BLANK = 7;
+let ocFilterIdea = "";   // "" = all ideas
+
+/* deterministic translucent colour for a value (readable in both themes) */
+function colorFor(v) {
+  const s = String(v || ""); if (!s) return "";
+  let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return `hsla(${h % 360},65%,55%,0.20)`;
+}
+const weekdayName = (iso) => { try { return new Date(iso + "T00:00:00").toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-GB", { weekday: "long" }); } catch (_) { return ""; } };
 
 const DEFAULTS = {
   goal: ["زيادة الثقة", "زيادة الوعي بالخدمات", "تثقيف العميل", "زيادة التفاعل", "بناء المجتمع"],
@@ -91,7 +102,8 @@ function cellInput(field, p) {
   if (field === "date") return `<input type="date" class="oc-cell" data-f="date" value="${esc(v)}" ${ro} />`;
   if (DROPDOWNS[field]) {
     const opts = ["<option value=\"\"></option>"].concat(optionsFor(field).map(o => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`)).join("");
-    return `<select class="oc-cell" data-f="${field}" ${ro}>${opts}</select>`;
+    const tint = v ? ` style="background:${colorFor(v)}"` : "";
+    return `<select class="oc-cell" data-f="${field}"${tint} ${ro}>${opts}</select>`;
   }
   return `<input class="oc-cell" data-f="${field}" value="${esc(v)}" ${ro} />`;
 }
@@ -136,9 +148,15 @@ function view() {
     .oc-cell:focus { outline:2px solid var(--brand); outline-offset:-1px }
     table.oc-grid td:nth-child(7) .oc-cell { min-width:200px }
   </style>`;
-  const blanks = W() ? Array.from({ length: N_BLANK }).map(() => rowHTML(null)).join("") : "";
-  const body = posts().map(rowHTML).join("") + blanks;
-  return `<div>${style}${linksBar()}
+  const filterSel = `<div class="toolbar"><div class="toolbar__left">
+    <span class="muted">${esc(t("oc.filterBy"))}</span>
+    <select class="input" id="ocFilter"><option value="">${esc(t("oc.allIdeas"))}</option>${optionsFor("idea").map(o => `<option ${ocFilterIdea === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>
+  </div></div>`;
+  const list = ocFilterIdea ? posts().filter(p => p.idea === ocFilterIdea) : posts();
+  // blank rows only when not filtering (so you can keep adding)
+  const blanks = (W() && !ocFilterIdea) ? Array.from({ length: N_BLANK }).map(() => rowHTML(null)).join("") : "";
+  const body = list.map(rowHTML).join("") + blanks;
+  return `<div>${style}${linksBar()}${filterSel}
     <div class="table-wrap"><table class="oc-grid">
       <thead><tr>${COLS.map(headerCell).join("")}<th>📎</th><th></th></tr></thead>
       <tbody id="ocBody">${body}</tbody>
@@ -232,6 +250,7 @@ function mount(ctx) {
   const reRender = () => (ctx && ctx.render ? ctx.render() : (OS().render && OS().render()));
   const el = $("#ocEditLinks"); if (el) el.onclick = () => linksEditor();
   $$(".oc-opt").forEach(b => b.onclick = () => optionEditor(b.dataset.f, reRender));
+  const flt = $("#ocFilter"); if (flt) flt.onchange = (e) => { ocFilterIdea = e.target.value; reRender(); };
 
   const body = $("#ocBody");
   if (!body) return;
@@ -240,7 +259,18 @@ function mount(ctx) {
   body.addEventListener("change", (e) => {
     const cell = e.target.closest("[data-f]"); if (!cell) return;
     const tr = cell.closest("tr"); const field = cell.dataset.f; const val = cell.value;
-    if (tr.dataset.id) { db().updateContentPost(tr.dataset.id, { [field]: val }); return; }
+    if (cell.tagName === "SELECT") cell.style.background = colorFor(val);  // recolour chip
+    // picking a date auto-fills the weekday in the Day cell
+    let extra = null;
+    if (field === "date" && val) {
+      const wd = weekdayName(val);
+      const dayCell = tr.querySelector('[data-f="day"]'); if (dayCell) dayCell.value = wd;
+      extra = { day: wd };
+    }
+    if (tr.dataset.id) {
+      const patch = { [field]: val }; if (extra) Object.assign(patch, extra);
+      db().updateContentPost(tr.dataset.id, patch); return;
+    }
     // draft row → create a post from whatever is filled in this row
     const data = {};
     tr.querySelectorAll("[data-f]").forEach(c => { if (c.value) data[c.dataset.f] = c.value; });
@@ -249,7 +279,8 @@ function mount(ctx) {
     const id = (db().contentPosts[0] || {}).id;
     tr.dataset.id = id; tr.removeAttribute("data-draft");
     if (can("del")) { const last = tr.querySelector("td:last-child"); if (last) last.innerHTML = `<button class="btn btn--ghost btn--sm btn--danger oc-del">🗑</button>`; }
-    if (!body.querySelector("tr[data-draft]")) body.insertAdjacentHTML("beforeend", rowHTML(null));
+    // keep blank rows available — top up when the last one is filled
+    if (!body.querySelector("tr[data-draft]")) { for (let i = 0; i < 3; i++) body.insertAdjacentHTML("beforeend", rowHTML(null)); }
   });
 
   body.addEventListener("click", (e) => {
