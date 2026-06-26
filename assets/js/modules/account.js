@@ -46,6 +46,17 @@ registerStrings({
     "role.viewer.d": "عرض فقط",
     "fld.name": "الاسم", "fld.email": "البريد الإلكتروني", "fld.password": "كلمة المرور",
     "btn.save": "حفظ", "btn.cancel": "إلغاء",
+    "acc.data.title": "البيانات والنسخ الاحتياطي",
+    "acc.data.hint": "نزّل نسخة من كل بياناتك أو استرجعها. تُحفظ نسخ تلقائية محلياً ولا تتأثر بمزامنة السحابة.",
+    "acc.data.export": "تنزيل نسخة احتياطية",
+    "acc.data.import": "استرجاع من ملف",
+    "acc.data.autosaves": "النسخ التلقائية الأخيرة",
+    "acc.data.restore": "استرجاع",
+    "acc.data.none": "لا توجد نسخ بعد",
+    "acc.data.restored": "تم الاسترجاع",
+    "acc.data.imported": "تم الاستيراد",
+    "acc.data.badfile": "ملف نسخة غير صالح",
+    "acc.data.confirm": "استرجاع هذه النسخة؟ سيتم حفظ الحالة الحالية أولاً.",
   },
   en: {
     "nav.account": "Account",
@@ -79,6 +90,17 @@ registerStrings({
     "role.viewer.d": "Read only",
     "fld.name": "Name", "fld.email": "Email", "fld.password": "Password",
     "btn.save": "Save", "btn.cancel": "Cancel",
+    "acc.data.title": "Data & Backup",
+    "acc.data.hint": "Download a copy of all your data or restore it. Automatic local backups are kept and are never touched by cloud sync.",
+    "acc.data.export": "Download backup (JSON)",
+    "acc.data.import": "Restore from file",
+    "acc.data.autosaves": "Recent automatic backups",
+    "acc.data.restore": "Restore",
+    "acc.data.none": "No backups yet",
+    "acc.data.restored": "Restored",
+    "acc.data.imported": "Imported",
+    "acc.data.badfile": "Invalid backup file",
+    "acc.data.confirm": "Restore this backup? Your current data is backed up first.",
   },
 });
 
@@ -131,7 +153,36 @@ function view() {
       </div>
     </div>` : "";
 
-  return `<div class="grid cards-2" style="align-items:start">${profile}${team}</div>`;
+  return `<div class="grid cards-2" style="align-items:start">${profile}${team}</div>${backupCard()}`;
+}
+
+function backupCard() {
+  const db = OS().db || {};
+  const list = (db.listBackups ? db.listBackups() : []);
+  const loc = getLang() === "ar" ? "ar-EG" : "en-GB";
+  const rows = list.length
+    ? list.map(b => {
+        let when = b.ts; try { when = new Date(b.ts).toLocaleString(loc); } catch (_) {}
+        const c = b.counts || {};
+        const summary = `💰 ${c.finance || 0} · 🗒️ ${c.tasks || 0} · 👤 ${c.owners || 0} · 🗓️ ${c.contentPosts || 0}`;
+        return `<div class="flex between" style="gap:8px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center">
+          <div><div style="font-size:13px">${esc(when)}</div>
+            <div class="muted" style="font-size:11.5px">${esc(b.reason)} · ${esc(summary)}</div></div>
+          <button class="btn btn--sm acc-restore" data-ts="${esc(b.ts)}">${esc(t("acc.data.restore"))}</button>
+        </div>`;
+      }).join("")
+    : `<p class="muted">${esc(t("acc.data.none"))}</p>`;
+  return `<div class="card" style="margin-top:16px">
+    <div class="card__head"><span class="card__title">💾 ${esc(t("acc.data.title"))}</span></div>
+    <p class="muted" style="margin:-4px 0 12px;font-size:12.5px">${esc(t("acc.data.hint"))}</p>
+    <div class="flex" style="gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn--primary btn--sm" id="acc_export">⬇ ${esc(t("acc.data.export"))}</button>
+      <label class="btn btn--sm" style="cursor:pointer">↥ ${esc(t("acc.data.import"))}
+        <input type="file" id="acc_import" accept="application/json,.json" hidden /></label>
+    </div>
+    <div style="font-weight:600;margin-bottom:6px">${esc(t("acc.data.autosaves"))}</div>
+    ${rows}
+  </div>`;
 }
 
 function teamTable(list) {
@@ -193,6 +244,34 @@ function mount() {
     else { r = await localSetPw(u.id, v); }
     if (r && r.error) { op.toast(errMsg(r.error)); return; }
     $("#me_pw").value = ""; op.toast(t("acc.me.pwchanged"));
+  });
+
+  // Data & Backup (available to everyone)
+  $("#acc_export") && ($("#acc_export").onclick = () => {
+    try {
+      const blob = new Blob([op.db.exportJSON()], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `ajrly-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (_) { op.toast(t("acc.data.badfile")); }
+  });
+  $("#acc_import") && ($("#acc_import").onchange = (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      const res = op.db.importJSON(String(r.result || ""));
+      if (res && res.error) { op.toast(t("acc.data.badfile")); return; }
+      op.toast(t("acc.data.imported")); op.render();
+    };
+    r.readAsText(f);
+  });
+  $$(".acc-restore").forEach(b => b.onclick = () => {
+    if (!confirm(t("acc.data.confirm"))) return;
+    const res = op.db.restoreBackup(b.dataset.ts);
+    if (res && res.error) { op.toast(t("acc.data.badfile")); return; }
+    op.toast(t("acc.data.restored")); op.render();
   });
 
   if (!canManage()) return;
