@@ -24,6 +24,13 @@ registerStrings({
     "fin.f.amount": "المبلغ",
     "fin.f.currency": "العملة",
     "fin.f.category": "التصنيف (اختياري)",
+    "fin.cat.ph": "اختر أو اكتب تصنيفاً…",
+    "fin.f.paidTo": "المدفوع له",
+    "fin.paidto.ph": "اختر مستلماً ثابتاً أو اكتب اسماً لمرة واحدة…",
+    "fin.f.saveRecipient": "حفظ كمستلم ثابت",
+    "fin.th.paidTo": "المدفوع له",
+    "fin.filter.cat": "التصنيف:",
+    "fin.allCats": "كل التصنيفات",
     "fin.f.desc": "السبب / الوصف",
     "fin.f.attachment": "إيصال / مرفق (PDF أو JPG)",
     "fin.attach.pick": "إرفاق ملف",
@@ -67,6 +74,13 @@ registerStrings({
     "fin.f.amount": "Amount",
     "fin.f.currency": "Currency",
     "fin.f.category": "Category (optional)",
+    "fin.cat.ph": "Pick or type a category…",
+    "fin.f.paidTo": "Paid to",
+    "fin.paidto.ph": "Pick a fixed recipient or type a once-off name…",
+    "fin.f.saveRecipient": "Save as fixed recipient",
+    "fin.th.paidTo": "Paid to",
+    "fin.filter.cat": "Category:",
+    "fin.allCats": "All categories",
     "fin.f.desc": "Reason / description",
     "fin.f.attachment": "Receipt / attachment (PDF or JPG)",
     "fin.attach.pick": "Attach file",
@@ -104,6 +118,25 @@ const fmtDate = (iso) => (OS().fmtDate ? OS().fmtDate(iso) : (iso || "—"));
 const can = (a) => (typeof OS().can === "function" ? OS().can(a) : false);
 const records = () => (OS().db && OS().db.finance) || [];
 
+/* Editable option lists (categories + recipients) reuse the synced
+   contentOpts store, discriminated by `field`. */
+const FIN_CAT = "finCategory", FIN_RCP = "finRecipient";
+const optsRaw = () => (OS().db && OS().db.contentOpts) || [];
+const savedOpts = (field) => optsRaw().filter(o => o.field === field).map(o => o.value).filter(Boolean);
+function addOpt(field, value) {
+  const v = String(value || "").trim();
+  if (!v) return;
+  if (savedOpts(field).some(x => x.toLowerCase() === v.toLowerCase())) return;
+  if (OS().db && OS().db.addContentOpt) OS().db.addContentOpt({ field, value: v, url: "" });
+}
+/* distinct categories: saved ∪ those already used on records */
+function categoriesPresent() {
+  const set = new Set(savedOpts(FIN_CAT));
+  records().forEach(r => { if (r.category) set.add(r.category); });
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+const recipientsList = () => savedOpts(FIN_RCP).slice().sort((a, b) => a.localeCompare(b));
+
 const CURRENCIES = ["LYD", "USD", "EUR", "EGP"];
 const MAX_ATT = 1.5 * 1024 * 1024; // 1.5 MB
 const ALLOWED = /(pdf|jpe?g|png)$/i;
@@ -112,6 +145,7 @@ let finTab = "expense"; // expense | income
 let finYear = null;     // selected year for the chart (null => latest present)
 let finCcy = "";        // selected currency for the chart ("" => most common)
 let finMonth = "";      // summary month filter "YYYY-MM" ("" => all time)
+let finCatFilter = "";  // category filter ("" => all categories)
 
 const MONTHS = {
   en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
@@ -296,7 +330,9 @@ function summaryCards() {
 }
 
 function table() {
-  const list = records().filter(r => (r.kind || "expense") === finTab);
+  let list = records().filter(r => (r.kind || "expense") === finTab);
+  if (finCatFilter) list = list.filter(r => (r.category || "") === finCatFilter);
+  const showPaid = finTab === "expense";
   if (!list.length) {
     return `<div class="card"><div class="empty">
       <div class="empty__icon">${finTab === "income" ? "📈" : "🧾"}</div>
@@ -311,6 +347,7 @@ function table() {
       <td><div class="cell-title">${esc(r.name || "—")}</div></td>
       <td>${fmtDate(r.date)}</td>
       <td>${r.category ? esc(r.category) : "—"}</td>
+      ${showPaid ? `<td>${r.paidTo ? esc(r.paidTo) : "—"}</td>` : ""}
       <td style="white-space:nowrap;font-variant-numeric:tabular-nums"><b>${money(r.amount, r.currency)}</b>${(r.currency !== "USD" && usdRate(r)) ? `<div class="muted" style="font-size:11.5px">≈ ${money(usdOf(r), "USD")}</div>` : ""}</td>
       <td><div class="muted" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.description || "")}</div></td>
       <td>${att}</td>
@@ -323,6 +360,7 @@ function table() {
   return `<div class="table-wrap"><table>
     <thead><tr>
       <th>${esc(t("fin.th.name"))}</th><th>${esc(t("fin.th.date"))}</th><th>${esc(t("fin.th.category"))}</th>
+      ${showPaid ? `<th>${esc(t("fin.th.paidTo"))}</th>` : ""}
       <th>${esc(t("fin.th.amount"))}</th><th>${esc(t("fin.th.desc"))}</th><th>${esc(t("fin.th.receipt"))}</th><th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
@@ -338,7 +376,15 @@ function view() {
   const addBtn = W
     ? `<button class="btn btn--primary" id="finAdd">＋ ${esc(t("fin.add." + finTab))}</button>`
     : "";
-  const toolbar = `<div class="toolbar"><div class="toolbar__left">${tabs}</div><div class="toolbar__right">${addBtn}</div></div>`;
+  const cats = categoriesPresent();
+  const catFilter = cats.length
+    ? `<span class="muted" style="align-self:center">${esc(t("fin.filter.cat"))}</span>
+       <select class="input" id="finCatFilter" style="max-width:200px">
+         <option value="">${esc(t("fin.allCats"))}</option>
+         ${cats.map(c => `<option value="${esc(c)}" ${finCatFilter === c ? "selected" : ""}>${esc(c)}</option>`).join("")}
+       </select>`
+    : "";
+  const toolbar = `<div class="toolbar"><div class="toolbar__left">${tabs}</div><div class="toolbar__right" style="gap:8px">${catFilter}${addBtn}</div></div>`;
   return `<div>${chartCard()}${summaryCards()}${toolbar}${table()}</div>`;
 }
 
@@ -357,8 +403,18 @@ function financeModal(rec) {
       <div class="field"><label>${esc(t("fin.f.name"))}</label><input id="fin_name" value="${esc(x.name || "")}" /></div>
       <div class="field-row">
         <div class="field"><label>${esc(t("fin.f.date"))}</label><input type="date" id="fin_date" value="${esc(x.date || todayISO())}" /></div>
-        <div class="field"><label>${esc(t("fin.f.category"))}</label><input id="fin_cat" value="${esc(x.category || "")}" /></div>
+        <div class="field"><label>${esc(t("fin.f.category"))}</label>
+          <input id="fin_cat" list="fin_cat_list" autocomplete="off" value="${esc(x.category || "")}" placeholder="${esc(t("fin.cat.ph"))}" />
+          <datalist id="fin_cat_list">${categoriesPresent().map(c => `<option value="${esc(c)}"></option>`).join("")}</datalist>
+        </div>
       </div>
+      ${kind === "expense" ? `<div class="field"><label>${esc(t("fin.f.paidTo"))}</label>
+        <input id="fin_paidto" list="fin_rcp_list" autocomplete="off" value="${esc(x.paidTo || "")}" placeholder="${esc(t("fin.paidto.ph"))}" />
+        <datalist id="fin_rcp_list">${recipientsList().map(r => `<option value="${esc(r)}"></option>`).join("")}</datalist>
+        <label class="flex" style="gap:6px;align-items:center;margin-top:6px;font-weight:400;font-size:12.5px">
+          <input type="checkbox" id="fin_paidto_fix" style="width:auto" /> ${esc(t("fin.f.saveRecipient"))}
+        </label>
+      </div>` : ""}
       <div class="field-row">
         <div class="field"><label>${esc(t("fin.f.amount"))}</label><input type="number" step="any" min="0" id="fin_amount" value="${esc(x.amount || "")}" /></div>
         <div class="field"><label>${esc(t("fin.f.currency"))}</label><select id="fin_currency">${CURRENCIES.map(c => opt(c, x.currency || "LYD", c)).join("")}</select></div>
@@ -416,11 +472,15 @@ function financeModal(rec) {
   };
 
   ($("[data-save]") || {}).onclick = () => {
+    const category = $("#fin_cat").value.trim();
+    const paidEl = $("#fin_paidto");
+    const paidTo = paidEl ? paidEl.value.trim() : (x.paidTo || "");
     const data = {
       kind,
       name: $("#fin_name").value.trim(),
       date: $("#fin_date").value || todayISO(),
-      category: $("#fin_cat").value.trim(),
+      category,
+      paidTo,
       amount: $("#fin_amount").value,
       currency: $("#fin_currency").value,
       rate: $("#fin_rate").value,
@@ -429,6 +489,11 @@ function financeModal(rec) {
       attachmentName: att ? att.name : "",
     };
     if (!data.name) { $("#fin_name").focus(); return; }
+    // categories are a reusable taxonomy → always remember them for the filter
+    if (category) addOpt(FIN_CAT, category);
+    // recipients: only remember when "save as fixed" is ticked (once-off otherwise)
+    const fix = $("#fin_paidto_fix");
+    if (paidTo && fix && fix.checked) addOpt(FIN_RCP, paidTo);
     if (editing) OS().db.updateFinance(rec.id, data); else OS().db.addFinance(data);
     OS().closeModal();
     (OS().render || (() => {}))();
@@ -440,10 +505,11 @@ function financeModal(rec) {
 /* ---------------- mount ---------------- */
 function mount(ctx) {
   const reRender = () => (ctx && ctx.render ? ctx.render() : (OS().render && OS().render()));
-  $$("[data-fintab]").forEach(b => b.onclick = () => { finTab = b.dataset.fintab; reRender(); });
+  $$("[data-fintab]").forEach(b => b.onclick = () => { finTab = b.dataset.fintab; finCatFilter = ""; reRender(); });
   const ys = $("#finYear"); if (ys) ys.onchange = (e) => { finYear = e.target.value; reRender(); };
   const cs = $("#finCcy"); if (cs) cs.onchange = (e) => { finCcy = e.target.value; reRender(); };
   const ms = $("#finMonth"); if (ms) ms.onchange = (e) => { finMonth = e.target.value; reRender(); };
+  const cf = $("#finCatFilter"); if (cf) cf.onchange = (e) => { finCatFilter = e.target.value; reRender(); };
   const add = $("#finAdd");
   if (add) add.onclick = () => financeModal(null);
   $$("[data-fedit]").forEach(b => b.onclick = () => financeModal(records().find(r => r.id === b.dataset.fedit)));
