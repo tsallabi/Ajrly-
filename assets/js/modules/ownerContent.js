@@ -119,7 +119,7 @@ function cellInput(field, p) {
     const hSel = `<select class="oc-cell oc-time" data-pt="h" ${ro} style="min-width:56px"><option value=""></option>${hours.map(s => `<option ${hh === s ? "selected" : ""}>${s}</option>`).join("")}</select>`;
     const mSel = `<select class="oc-cell oc-time" data-pt="m" ${ro} style="min-width:56px"><option value=""></option>${mins.map(s => `<option ${mm === s ? "selected" : ""}>${s}</option>`).join("")}</select>`;
     const shown = hh ? `${hh}:${mm || "00"}` : "";
-    return `<span class="oc-timelabel" style="cursor:pointer;display:inline-block;min-width:50px;text-align:center;padding:6px 4px">${esc(shown) || "⏰"}</span>` +
+    return `<span class="oc-timelabel" style="cursor:pointer;display:inline-block;min-width:40px;text-align:center;padding:4px 2px;font-size:13px">${esc(shown) || "⏰"}</span>` +
       `<span class="oc-timeedit flex" style="display:none;gap:4px;align-items:center;justify-content:center">${hSel}<b>:</b>${mSel}</span>`;
   }
   return `<input class="oc-cell" data-f="${field}" value="${esc(v)}" ${ro} />`;
@@ -220,6 +220,7 @@ function view() {
     table.oc-grid td:nth-child(2) { width:58px }   /* date — narrow */
     table.oc-grid td:nth-child(7) .oc-cell { min-width:300px }  /* caption — roomy */
     table.oc-grid td:nth-child(5) .oc-cell { min-width:170px }  /* content idea */
+    table.oc-grid td:nth-child(8) { width:74px; text-align:center }  /* publishing time — compact + centred */
   </style>`;
   const tabs = `<div class="seg" id="ocTabs" style="margin-bottom:14px">
     <button data-ocview="grid" class="${ocView === "grid" ? "active" : ""}">🗓️ ${esc(t("oc.tab.grid"))}</button>
