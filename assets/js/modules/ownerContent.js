@@ -74,14 +74,25 @@ function mondayOf(d) { const x = startOfDay(d); const dow = x.getDay(); x.setDat
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 const isoOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const selectedMonday = () => addDays(mondayOf(new Date()), weekOff * 7);
+/* ISO 8601 week-of-year: weeks 1–53, Monday-start, week 1 holds the
+   year's first Thursday (the global standard). */
+function isoWeek(d) {
+  const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = x.getUTCDay() || 7;            // Sun=7
+  x.setUTCDate(x.getUTCDate() + 4 - dayNum);    // shift to this week's Thursday
+  const yearStart = new Date(Date.UTC(x.getUTCFullYear(), 0, 1));
+  return Math.ceil(((x - yearStart) / 86400000 + 1) / 7);
+}
 function weekLabel(mon) {
   const lang = getLang();
   const loc = lang === "ar" ? "ar-EG" : "en-GB";
-  const word = lang === "ar" ? "الأسبوع" : "Week";
-  const part = (d) => `${d.toLocaleDateString(loc, { month: "long" })} ${word} ${Math.ceil(d.getDate() / 7)}`;
   const sun = addDays(mon, 6);
-  // a week that crosses into the next month shows both, e.g. "June Week 5 - July Week 1"
-  return mon.getMonth() === sun.getMonth() ? part(mon) : `${part(mon)} - ${part(sun)}`;
+  const monName = (d) => d.toLocaleDateString(loc, { month: "long" });
+  // months the Mon→Sun week spans (one, or "June – July" across a boundary)
+  const span = mon.getMonth() === sun.getMonth() ? monName(mon) : `${monName(mon)} – ${monName(sun)}`;
+  const year = addDays(mon, 3).getFullYear(); // ISO week-year = the Thursday's year
+  const word = lang === "ar" ? "الأسبوع" : "Week";
+  return `${word} ${isoWeek(mon)} · ${span} ${year}`;
 }
 
 /* deterministic translucent colour for a value (readable in both themes) */
