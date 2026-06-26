@@ -1,8 +1,11 @@
 /* ============================================================
    Ajrly OS — Presence client (live heartbeat)            [WS-B]
    ------------------------------------------------------------
-   Opens a WebSocket to /api/realtime after login and keeps the
-   "Live Ops Room" fed with real-time presence.
+   Keeps the "Live Ops Room" fed with near-real-time presence by
+   polling /api/presence (KV-backed). No WebSocket / Durable Object —
+   the heartbeat is a plain POST every BEAT_MS that also returns the
+   current roster; we merge our own record in so the caller sees
+   themselves online immediately.
 
    PRIVACY (hard rules):
      • We derive a single `active` BOOLEAN from mousemove/keydown/
@@ -20,23 +23,23 @@
      setMonitorDisclosure(level) — show one-time GDPR banner if
                               the current user is under extended.
 
-   Degrades gracefully: if the WS never connects (local mode), every
+   Degrades gracefully: if the API is unreachable (local mode) every
    getter returns empty and the UI falls back to a "cloud not enabled"
    note. Never throws into the app.
    ============================================================ */
 
-const HEARTBEAT_MS = 30_000;     // send hb every 30s
+const BEAT_MS = 20_000;          // POST a heartbeat (and refresh roster) every 20s
 const ACTIVE_WINDOW_MS = 30_000; // "active" if input within last 30s
-const MAX_BACKOFF_MS = 30_000;
+const STALE_MS = 65_000;         // no successful beat within this → disconnected
 
 const state = {
-  ws: null,
   started: false,
   wantOpen: false,
   connected: false,
   lastInput: 0,
-  hbTimer: null,
-  backoff: 1000,
+  lastBeatOk: 0,
+  beatTimer: null,
+  inFlight: false,
   users: [],
   taskId: "",
   presenceSubs: new Set(),
@@ -55,103 +58,67 @@ function bindActivityListeners() {
     window.addEventListener(ev, markActive, opts)
   );
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") { markActive(); sendFocus("focus"); }
-    else sendFocus("blur");
+    if (document.visibilityState === "visible") { markActive(); beat(); }
   });
-  window.addEventListener("focus", () => sendFocus("focus"));
-  window.addEventListener("blur", () => sendFocus("blur"));
+  window.addEventListener("focus", () => { markActive(); beat(); });
 }
 
-/* ---------------- current route → taskId/section ---------------- */
+/* ---------------- current route → section ---------------- */
 function currentSection() {
   return (location.hash || "#/dashboard").replace(/^#\//, "").split("?")[0] || "dashboard";
 }
 
-/* ---------------- socket ---------------- */
-function wsURL() {
-  const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${location.host}/api/realtime`;
-}
-
-function connect() {
-  if (!state.wantOpen) return;
-  if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) return;
-
-  let ws;
-  try { ws = new WebSocket(wsURL()); } catch (_) { scheduleReconnect(); return; }
-  state.ws = ws;
-
-  ws.addEventListener("open", () => {
+/* ---------------- heartbeat (POST → roster) ---------------- */
+async function beat() {
+  if (!state.wantOpen || state.inFlight) return;
+  state.inFlight = true;
+  try {
+    const res = await fetch("/api/presence", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: isActive(), taskId: state.taskId || "", section: currentSection() }),
+    });
+    if (!res.ok) throw new Error("hb_" + res.status);
+    const data = await res.json();
     state.connected = true;
-    state.backoff = 1000;
-    markActive();
-    sendHeartbeat();        // immediate first beat
-    startHeartbeat();
-  });
-
-  ws.addEventListener("message", (ev) => {
-    let msg = null;
-    try { msg = JSON.parse(ev.data); } catch (_) { return; }
-    handleMessage(msg);
-  });
-
-  ws.addEventListener("close", () => {
-    state.connected = false;
-    stopHeartbeat();
-    scheduleReconnect();
-  });
-  ws.addEventListener("error", () => {
-    try { ws.close(); } catch (_) {}
-  });
-}
-
-function scheduleReconnect() {
-  if (!state.wantOpen) return;
-  const delay = state.backoff;
-  state.backoff = Math.min(MAX_BACKOFF_MS, Math.round(state.backoff * 1.8));
-  setTimeout(connect, delay);
-}
-
-function send(obj) {
-  const ws = state.ws;
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  try { ws.send(JSON.stringify(obj)); } catch (_) {}
-}
-
-function sendHeartbeat() {
-  send({ type: "hb", active: isActive(), taskId: state.taskId || "", section: currentSection() });
-}
-function sendFocus(kind) { send({ type: kind }); }
-
-function startHeartbeat() {
-  stopHeartbeat();
-  state.hbTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
-}
-function stopHeartbeat() {
-  if (state.hbTimer) { clearInterval(state.hbTimer); state.hbTimer = null; }
-}
-
-/* ---------------- message handling ---------------- */
-function handleMessage(msg) {
-  if (!msg || typeof msg.type !== "string") return;
-  if (msg.type === "hello") {
-    state.self = msg.self || null;
-    if (Array.isArray(msg.users)) { state.users = msg.users; emitPresence(); }
-    // GDPR: if this user is under extended monitoring, disclose once.
-    if (state.self && state.self.monitor === "extended") {
-      setMonitorDisclosure("extended");
-    }
-    return;
+    state.lastBeatOk = Date.now();
+    state.self = data.self || state.self;
+    applyRoster(Array.isArray(data.users) ? data.users : []);
+    // GDPR: disclose once if this user is under extended monitoring.
+    if (state.self && state.self.monitor === "extended") setMonitorDisclosure("extended");
+  } catch (_) {
+    if (Date.now() - state.lastBeatOk > STALE_MS) state.connected = false;
+  } finally {
+    state.inFlight = false;
   }
-  if (msg.type === "presence" && Array.isArray(msg.users)) {
-    state.users = msg.users;
-    emitPresence();
-    return;
+}
+
+/* Merge our own record into the roster (KV list is eventually
+   consistent, so a fresh self-beat may not be listed yet). */
+function applyRoster(users) {
+  const merged = users.slice();
+  if (state.self && state.self.userId) {
+    const i = merged.findIndex((u) => u.userId === state.self.userId);
+    const mine = {
+      userId: state.self.userId, name: state.self.name, role: state.self.role,
+      status: state.self.active ? "online" : "idle",
+      currentTask: state.self.taskId || "", section: state.self.section || "",
+      activeMinutes: state.self.activeMinutes || 0, monitor: state.self.monitor || "standard",
+    };
+    if (i >= 0) merged[i] = mine; else merged.push(mine);
   }
-  if (msg.type === "notify") {
-    state.notifySubs.forEach((cb) => { try { cb(msg); } catch (_) {} });
-    return;
-  }
+  state.users = merged;
+  emitPresence();
+}
+
+function startBeating() {
+  stopBeating();
+  beat(); // immediate first beat
+  state.beatTimer = setInterval(beat, BEAT_MS);
+}
+function stopBeating() {
+  if (state.beatTimer) { clearInterval(state.beatTimer); state.beatTimer = null; }
 }
 
 function emitPresence() {
@@ -200,14 +167,13 @@ function start(opts) {
   opts = opts || {};
   if (!state.started) { bindActivityListeners(); state.started = true; }
   state.wantOpen = true;
-  state.backoff = 1000;
-  connect();
+  markActive();
+  startBeating();
 }
 
 function stop() {
   state.wantOpen = false;
-  stopHeartbeat();
-  if (state.ws) { try { state.ws.close(); } catch (_) {} state.ws = null; }
+  stopBeating();
   state.connected = false;
 }
 
@@ -226,8 +192,8 @@ function onNotify(cb) {
 }
 
 function getPresence() { return state.users.slice(); }
-function isConnected() { return state.connected; }
-function setTask(taskId) { state.taskId = String(taskId || ""); sendHeartbeat(); }
+function isConnected() { return state.connected && (Date.now() - state.lastBeatOk < STALE_MS); }
+function setTask(taskId) { state.taskId = String(taskId || ""); beat(); }
 
 const AjrlyPresence = {
   start, stop, onPresence, onNotify, getPresence,
