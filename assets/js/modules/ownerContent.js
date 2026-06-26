@@ -61,11 +61,25 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const MAX_ATT = 1.5 * 1024 * 1024;
 const COLS = ["day", "date", "goal", "postTo", "idea", "type", "caption", "pubTime"];
+const EDIT_COLS = ["goal", "postTo", "idea", "type", "caption", "pubTime"]; // day+date are auto
 const DROPDOWNS = { goal: 1, postTo: 1, idea: 1, type: 1 };
-const N_BLANK = 7;
 let ocFilterIdea = "";   // "" = all ideas
 let ocView = "grid";     // grid | calendar
 let calOff = 0;          // month offset for the calendar tab
+let weekOff = 0;         // week offset for the grid (0 = current week; never < 0)
+
+/* ---- week-grid date helpers (rows are auto-dated Mon→Sun) ---- */
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+function mondayOf(d) { const x = startOfDay(d); const dow = x.getDay(); x.setDate(x.getDate() + (dow === 0 ? -6 : 1 - dow)); return x; }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+const isoOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const selectedMonday = () => addDays(mondayOf(new Date()), weekOff * 7);
+function weekLabel(mon) {
+  const lang = getLang();
+  const monthName = mon.toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB", { month: "long" });
+  const wk = Math.ceil(mon.getDate() / 7);
+  return lang === "ar" ? `${monthName} الأسبوع ${wk}` : `${monthName} WK ${wk}`;
+}
 
 /* deterministic translucent colour for a value (readable in both themes) */
 function colorFor(v) {
@@ -105,8 +119,6 @@ const W = () => can("write");
 function cellInput(field, p) {
   const v = (p && p[field]) || "";
   const ro = W() ? "" : "disabled";
-  if (field === "day") return `<input class="oc-cell" data-f="day" value="${esc(v)}" ${ro} style="width:58px;min-width:48px;text-align:center" />`;
-  if (field === "date") return `<span class="oc-datelabel" title="${esc(v)}" style="cursor:pointer;display:inline-block;min-width:42px;text-align:center;padding:6px 4px">${esc(fmtDM(v)) || "📅"}</span><input type="date" class="oc-cell oc-datein" data-f="date" value="${esc(v)}" style="display:none" ${ro} />`;
   if (DROPDOWNS[field]) {
     const opts = ["<option value=\"\"></option>"].concat(optionsFor(field).map(o => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`)).join("");
     const tint = v ? ` style="background:${colorFor(v)}"` : "";
@@ -141,11 +153,16 @@ function attachCellHTML(p) {
   const btn = W() ? `<button class="btn btn--ghost btn--sm oc-att" style="padding:0 6px">＋</button>` : "";
   return `${link}${btn}`;
 }
-function rowHTML(p) {
+/* a grid row keyed to a fixed date: day + date are auto/read-only, the
+   rest of the columns are editable. p is the existing post (or null). */
+function gridRowHTML(iso, p) {
   const idAttr = p ? `data-id="${p.id}"` : `data-draft="1"`;
-  const tds = COLS.map(f => `<td>${cellInput(f, p)}</td>`).join("");
+  const isToday = iso && iso === todayISO();
+  const dayCell = `<td><span class="oc-auto">${esc(weekdayName(iso))}</span></td>`;
+  const dateCell = `<td><span class="oc-auto oc-autodate">${esc(fmtDM(iso))}</span></td>`;
+  const tds = EDIT_COLS.map(f => `<td>${cellInput(f, p)}</td>`).join("");
   const del = (p && can("del")) ? `<button class="btn btn--ghost btn--sm btn--danger oc-del">🗑</button>` : "";
-  return `<tr ${idAttr}>${tds}<td style="white-space:nowrap">${attachCellHTML(p)}</td><td>${del}</td></tr>`;
+  return `<tr ${idAttr} data-date="${esc(iso)}"${isToday ? ' class="oc-today"' : ""}>${dayCell}${dateCell}${tds}<td style="white-space:nowrap">${attachCellHTML(p)}</td><td>${del}</td></tr>`;
 }
 
 function linksBar() {
@@ -224,6 +241,11 @@ function view() {
     table.oc-grid td:nth-child(7) .oc-cell { min-width:300px }  /* caption — roomy */
     table.oc-grid td:nth-child(5) .oc-cell { min-width:170px }  /* content idea */
     table.oc-grid td:nth-child(8) { width:74px; text-align:center }  /* publishing time — compact + centred */
+    table.oc-grid td:nth-child(1), table.oc-grid td:nth-child(2) { text-align:center }
+    .oc-auto { display:inline-block; min-width:40px; font-weight:600; color:var(--muted,#94a3b8) }
+    .oc-autodate { color:var(--text) }
+    tr.oc-today td { background:rgba(26,92,255,.10) }
+    tr.oc-today td:nth-child(2) .oc-auto { color:var(--brand); font-weight:700 }
   </style>`;
   const tabs = `<div class="seg" id="ocTabs" style="margin-bottom:14px">
     <button data-ocview="grid" class="${ocView === "grid" ? "active" : ""}">🗓️ ${esc(t("oc.tab.grid"))}</button>
@@ -235,11 +257,31 @@ function view() {
     <span class="muted">${esc(t("oc.filterBy"))}</span>
     <select class="input" id="ocFilter"><option value="">${esc(t("oc.allIdeas"))}</option>${optionsFor("idea").map(o => `<option ${ocFilterIdea === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>
   </div></div>`;
-  const list = ocFilterIdea ? posts().filter(p => p.idea === ocFilterIdea) : posts();
-  // blank rows only when not filtering (so you can keep adding)
-  const blanks = (W() && !ocFilterIdea) ? Array.from({ length: N_BLANK }).map(() => rowHTML(null)).join("") : "";
-  const body = list.map(rowHTML).join("") + blanks;
-  return `<div>${style}${tabs}${linksBar()}${filterSel}
+
+  let weekBar = "", body = "";
+  if (ocFilterIdea) {
+    // filtering: flat list of matching posts (across all weeks), auto-dated rows
+    body = posts().filter(p => p.idea === ocFilterIdea).map(p => gridRowHTML(p.date || "", p)).join("");
+  } else {
+    // week view: one auto-dated row per day Mon→Sun of the selected week
+    const mon = selectedMonday();
+    weekBar = `<div class="card" style="padding:10px 14px;margin-bottom:12px"><div class="flex between" style="align-items:center">
+      <span class="card__title">🗓️ ${esc(weekLabel(mon))}</span>
+      <span class="flex" style="gap:4px">
+        <button class="btn btn--ghost btn--sm" data-wk="prev" ${weekOff <= 0 ? "disabled" : ""}>‹</button>
+        <button class="btn btn--sm" data-wk="today">${getLang() === "ar" ? "اليوم" : "Today"}</button>
+        <button class="btn btn--ghost btn--sm" data-wk="next">›</button>
+      </span></div></div>`;
+    const rows = [];
+    for (let i = 0; i < 7; i++) {
+      const iso = isoOf(addDays(mon, i));
+      const dayPosts = posts().filter(x => x.date === iso);
+      if (dayPosts.length) dayPosts.forEach(p => rows.push(gridRowHTML(iso, p)));
+      else rows.push(gridRowHTML(iso, null));
+    }
+    body = rows.join("");
+  }
+  return `<div>${style}${tabs}${linksBar()}${filterSel}${weekBar}
     <div class="table-wrap"><table class="oc-grid">
       <thead><tr>${COLS.map(headerCell).join("")}<th>📎</th><th></th></tr></thead>
       <tbody id="ocBody">${body}</tbody>
@@ -337,6 +379,11 @@ function mount(ctx) {
     const d = b.dataset.ccnav; if (d === "prev") calOff -= 1; else if (d === "next") calOff += 1; else calOff = 0;
     reRender();
   });
+  // week navigator for the grid (never goes before the current week)
+  $$("[data-wk]").forEach(b => b.onclick = () => {
+    const d = b.dataset.wk; if (d === "prev") weekOff = Math.max(0, weekOff - 1); else if (d === "next") weekOff += 1; else weekOff = 0;
+    reRender();
+  });
   const el = $("#ocEditLinks"); if (el) el.onclick = () => linksEditor();
   $$(".oc-opt").forEach(b => b.onclick = () => optionEditor(b.dataset.f, reRender));
   const flt = $("#ocFilter"); if (flt) flt.onchange = (e) => { ocFilterIdea = e.target.value; reRender(); };
@@ -364,37 +411,23 @@ function mount(ctx) {
       field = cell.dataset.f; val = cell.value;
       if (cell.tagName === "SELECT") cell.style.background = colorFor(val);  // recolour chip
     }
-    // picking a date: show compact d/m label, hide the picker, auto-fill the weekday
-    let extra = null;
-    if (field === "date") {
-      const lbl = tr.querySelector(".oc-datelabel");
-      if (lbl) { lbl.textContent = fmtDM(val) || "📅"; lbl.style.display = ""; }
-      cell.style.display = "none";
-      if (val) { const wd = weekdayName(val); const dayCell = tr.querySelector('[data-f="day"]'); if (dayCell) dayCell.value = wd; extra = { day: wd }; }
-    }
     if (tr.dataset.id) {
-      const patch = { [field]: val }; if (extra) Object.assign(patch, extra);
-      db().updateContentPost(tr.dataset.id, patch); return;
+      db().updateContentPost(tr.dataset.id, { [field]: val }); return;
     }
-    // draft row → create a post from whatever is filled in this row
+    // draft row → create a post from whatever is filled, stamped with the
+    // row's fixed (auto) date + weekday.
     const data = readRow(tr);
     if (!Object.keys(data).length) return;
+    const iso = tr.dataset.date || "";
+    if (iso) { data.date = iso; data.day = weekdayName(iso); }
     db().addContentPost(data);
     const id = (db().contentPosts[0] || {}).id;
     tr.dataset.id = id; tr.removeAttribute("data-draft");
     if (can("del")) { const last = tr.querySelector("td:last-child"); if (last) last.innerHTML = `<button class="btn btn--ghost btn--sm btn--danger oc-del">🗑</button>`; }
-    // keep blank rows available — top up when the last one is filled
-    if (!body.querySelector("tr[data-draft]")) { for (let i = 0; i < 3; i++) body.insertAdjacentHTML("beforeend", rowHTML(null)); }
   });
 
-  // collapse the date picker / time pickers back to their compact box on blur
+  // collapse the time pickers back to their compact box on blur
   body.addEventListener("focusout", (e) => {
-    const dinp = e.target.closest && e.target.closest(".oc-datein");
-    if (dinp) {
-      const lbl = dinp.parentNode.querySelector(".oc-datelabel");
-      if (lbl) { lbl.textContent = fmtDM(dinp.value) || "📅"; lbl.style.display = ""; }
-      dinp.style.display = "none"; return;
-    }
     const tsel = e.target.closest && e.target.closest(".oc-time");
     if (tsel) {
       const td = tsel.closest("td");
@@ -412,14 +445,6 @@ function mount(ctx) {
 
   body.addEventListener("click", (e) => {
     const tr = e.target.closest("tr"); if (!tr) return;
-    // click the compact date label → reveal the date picker
-    const lbl = e.target.closest(".oc-datelabel");
-    if (lbl && W()) {
-      const inp = lbl.parentNode.querySelector(".oc-datein");
-      lbl.style.display = "none"; inp.style.display = ""; inp.focus();
-      if (inp.showPicker) { try { inp.showPicker(); } catch (_) {} }
-      return;
-    }
     // click the compact time box → reveal the hour/minute dropdowns
     const tlbl = e.target.closest(".oc-timelabel");
     if (tlbl && W()) {
