@@ -43,6 +43,7 @@ registerStrings({
     "fin.sum.expense": "إجمالي المصروفات",
     "fin.sum.net": "الصافي",
     "fin.sum.usdAll": "الصافي بالدولار (كل العملات)",
+    "fin.summaryFor": "ملخص:", "fin.allTime": "كل الفترات", "fin.empty.month": "لا توجد حركات في هذا الشهر",
     "fin.chart.title": "ملخص السنة (شهرياً)",
     "fin.empty.expense": "لا توجد مصروفات بعد",
     "fin.empty.income": "لا توجد إيرادات بعد",
@@ -85,6 +86,7 @@ registerStrings({
     "fin.sum.expense": "Total expenses",
     "fin.sum.net": "Net",
     "fin.sum.usdAll": "Net in USD (all currencies)",
+    "fin.summaryFor": "Summary:", "fin.allTime": "All time", "fin.empty.month": "No entries in this month",
     "fin.chart.title": "Yearly summary (monthly)",
     "fin.empty.expense": "No expenses yet",
     "fin.empty.income": "No income yet",
@@ -109,6 +111,7 @@ const ALLOWED = /(pdf|jpe?g|png)$/i;
 let finTab = "expense"; // expense | income
 let finYear = null;     // selected year for the chart (null => latest present)
 let finCcy = "";        // selected currency for the chart ("" => most common)
+let finMonth = "";      // summary month filter "YYYY-MM" ("" => all time)
 
 const MONTHS = {
   en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
@@ -127,19 +130,33 @@ function money(amount, currency) {
 const usdRate = (r) => (r && r.rate ? num(r.rate) : ((r && (r.currency || "") === "USD") ? 1 : 0));
 const usdOf = (r) => num(r && r.amount) * usdRate(r);
 /* totals converted to USD across all currencies */
-function usdTotals() {
+function usdTotals(list) {
   let income = 0, expense = 0, any = false;
-  records().forEach(r => {
+  (list || records()).forEach(r => {
     const u = usdOf(r);
     if (u) { any = true; if ((r.kind || "expense") === "income") income += u; else expense += u; }
   });
   return { income, expense, any };
 }
 
-/* per-currency { income, expense } across all records */
-function totals() {
+/* ---- summary month filter (auto-built from logged data) ---- */
+const inMonth = (r) => !finMonth || String(r.date || "").slice(0, 7) === finMonth;
+const summaryRecords = () => records().filter(inMonth);
+function monthsPresent() {
+  const set = new Set();
+  records().forEach(r => { const m = String(r.date || "").slice(0, 7); if (/^\d{4}-\d{2}$/.test(m)) set.add(m); });
+  return [...set].sort().reverse(); // newest month first
+}
+function monthLabel(key) {
+  const p = key.split("-"); const y = +p[0], m = +p[1];
+  try { return new Date(y, m - 1, 1).toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-GB", { month: "long", year: "numeric" }); }
+  catch (_) { return key; }
+}
+
+/* per-currency { income, expense } across the given records (defaults to all) */
+function totals(list) {
   const by = {};
-  records().forEach(r => {
+  (list || records()).forEach(r => {
     const c = r.currency || "LYD";
     by[c] = by[c] || { income: 0, expense: 0 };
     if ((r.kind || "expense") === "income") by[c].income += num(r.amount);
@@ -228,10 +245,24 @@ function chartCard() {
 
 /* ---------------- view ---------------- */
 function summaryCards() {
-  const by = totals();
+  if (!records().length) {
+    return `<div class="card"><div class="empty"><div class="empty__icon">💰</div><p class="muted">${esc(t("fin.empty.summary"))}</p></div></div>`;
+  }
+  // month dropdown — auto-built from logged months
+  const months = monthsPresent();
+  const monthSel = `<select class="input" id="finMonth">
+    <option value="">${esc(t("fin.allTime"))}</option>
+    ${months.map(m => `<option value="${m}" ${finMonth === m ? "selected" : ""}>${esc(monthLabel(m))}</option>`).join("")}
+  </select>`;
+  const head = `<div class="toolbar" style="margin-bottom:10px"><div class="toolbar__left">
+    <span class="muted">${esc(t("fin.summaryFor"))}</span> ${monthSel}
+  </div></div>`;
+
+  const recs = summaryRecords();
+  const by = totals(recs);
   const keys = Object.keys(by);
   if (!keys.length) {
-    return `<div class="card"><div class="empty"><div class="empty__icon">💰</div><p class="muted">${esc(t("fin.empty.summary"))}</p></div></div>`;
+    return head + `<div class="card" style="margin-bottom:16px"><div class="empty"><div class="empty__icon">📭</div><p class="muted">${esc(t("fin.empty.month"))}</p></div></div>`;
   }
   const cards = keys.map(c => {
     const net = by[c].income - by[c].expense;
@@ -247,7 +278,7 @@ function summaryCards() {
     </div>`;
   });
   // unified total converted to USD (uses each transaction's exchange rate)
-  const u = usdTotals();
+  const u = usdTotals(recs);
   if (u.any) {
     const net = u.income - u.expense;
     const netColor = net >= 0 ? "var(--st-complete)" : "var(--st-overdue, #ef4444)";
@@ -261,7 +292,7 @@ function summaryCards() {
       </div>
     </div>`);
   }
-  return `<div class="grid cards-3" style="margin-bottom:16px">${cards.join("")}</div>`;
+  return head + `<div class="grid cards-3" style="margin-bottom:16px">${cards.join("")}</div>`;
 }
 
 function table() {
@@ -412,6 +443,7 @@ function mount(ctx) {
   $$("[data-fintab]").forEach(b => b.onclick = () => { finTab = b.dataset.fintab; reRender(); });
   const ys = $("#finYear"); if (ys) ys.onchange = (e) => { finYear = e.target.value; reRender(); };
   const cs = $("#finCcy"); if (cs) cs.onchange = (e) => { finCcy = e.target.value; reRender(); };
+  const ms = $("#finMonth"); if (ms) ms.onchange = (e) => { finMonth = e.target.value; reRender(); };
   const add = $("#finAdd");
   if (add) add.onclick = () => financeModal(null);
   $$("[data-fedit]").forEach(b => b.onclick = () => financeModal(records().find(r => r.id === b.dataset.fedit)));
