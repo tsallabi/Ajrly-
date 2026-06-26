@@ -31,6 +31,11 @@ registerStrings({
     "fin.th.paidTo": "المدفوع له",
     "fin.filter.cat": "التصنيف:",
     "fin.allCats": "كل التصنيفات",
+    "fin.settings": "إعدادات — تعديل القوائم",
+    "fin.settings.cats": "التصنيفات",
+    "fin.settings.rcps": "المستلمون الثابتون (المدفوع له)",
+    "fin.opt.add": "إضافة",
+    "fin.opt.ph": "خيار جديد…",
     "fin.f.desc": "السبب / الوصف",
     "fin.f.attachment": "إيصال / مرفق (PDF أو JPG)",
     "fin.attach.pick": "إرفاق ملف",
@@ -81,6 +86,11 @@ registerStrings({
     "fin.th.paidTo": "Paid to",
     "fin.filter.cat": "Category:",
     "fin.allCats": "All categories",
+    "fin.settings": "Settings — manage dropdowns",
+    "fin.settings.cats": "Categories",
+    "fin.settings.rcps": "Fixed recipients (Paid to)",
+    "fin.opt.add": "Add",
+    "fin.opt.ph": "New option…",
     "fin.f.desc": "Reason / description",
     "fin.f.attachment": "Receipt / attachment (PDF or JPG)",
     "fin.attach.pick": "Attach file",
@@ -146,6 +156,7 @@ let finYear = null;     // selected year for the chart (null => latest present)
 let finCcy = "";        // selected currency for the chart ("" => most common)
 let finMonth = "";      // summary month filter "YYYY-MM" ("" => all time)
 let finCatFilter = "";  // category filter ("" => all categories)
+let finSettings = false; // settings (dropdown manager) expanded?
 
 const MONTHS = {
   en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
@@ -367,6 +378,32 @@ function table() {
   </table></div>`;
 }
 
+/* ---- settings: manage the editable dropdowns (categories + recipients) ---- */
+function optBlock(field, labelKey, addId, inpId) {
+  const rows = optsRaw().filter(o => o.field === field);
+  const chips = rows.length
+    ? rows.map(o => `<span class="flex" style="gap:6px;align-items:center;background:var(--brand-soft);color:var(--brand);border-radius:999px;padding:4px 6px 4px 12px;font-size:12.5px">
+        ${esc(o.value)}<button class="icon-btn" data-rmopt="${o.id}" title="✕" style="width:20px;height:20px;line-height:1;padding:0;font-size:12px">✕</button></span>`).join("")
+    : `<span class="muted">—</span>`;
+  return `<div style="margin-bottom:16px">
+    <div class="muted" style="margin-bottom:8px;font-weight:600">${esc(t(labelKey))}</div>
+    <div class="flex" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">${chips}</div>
+    <div class="flex" style="gap:8px">
+      <input class="input" id="${inpId}" placeholder="${esc(t("fin.opt.ph"))}" style="max-width:260px" />
+      <button class="btn btn--sm" id="${addId}">＋ ${esc(t("fin.opt.add"))}</button>
+    </div>
+  </div>`;
+}
+function settingsCard() {
+  if (!can("write")) return "";
+  const head = `<div style="margin-top:18px"><button class="btn btn--ghost btn--sm" id="finSettingsBtn">⚙️ ${esc(t("fin.settings"))} ${finSettings ? "▲" : "▼"}</button></div>`;
+  if (!finSettings) return head;
+  return head + `<div class="card" style="margin-top:10px">
+    ${optBlock(FIN_CAT, "fin.settings.cats", "finAddCat", "finNewCat")}
+    ${optBlock(FIN_RCP, "fin.settings.rcps", "finAddRcp", "finNewRcp")}
+  </div>`;
+}
+
 function view() {
   const W = can("write");
   const tabs = `<div class="seg" id="finTabs">
@@ -385,7 +422,7 @@ function view() {
        </select>`
     : "";
   const toolbar = `<div class="toolbar"><div class="toolbar__left">${tabs}</div><div class="toolbar__right" style="gap:8px">${catFilter}${addBtn}</div></div>`;
-  return `<div>${chartCard()}${summaryCards()}${toolbar}${table()}</div>`;
+  return `<div>${chartCard()}${summaryCards()}${toolbar}${table()}${settingsCard()}</div>`;
 }
 
 /* ---------------- modal ---------------- */
@@ -510,6 +547,22 @@ function mount(ctx) {
   const cs = $("#finCcy"); if (cs) cs.onchange = (e) => { finCcy = e.target.value; reRender(); };
   const ms = $("#finMonth"); if (ms) ms.onchange = (e) => { finMonth = e.target.value; reRender(); };
   const cf = $("#finCatFilter"); if (cf) cf.onchange = (e) => { finCatFilter = e.target.value; reRender(); };
+
+  // settings: manage the editable dropdowns
+  const sb = $("#finSettingsBtn"); if (sb) sb.onclick = () => { finSettings = !finSettings; reRender(); };
+  const addFromInput = (inpId, field) => {
+    const inp = $(inpId); if (!inp) return;
+    const v = inp.value.trim(); if (!v) { inp.focus(); return; }
+    addOpt(field, v); reRender();
+  };
+  const ac = $("#finAddCat"); if (ac) ac.onclick = () => addFromInput("#finNewCat", FIN_CAT);
+  const ar = $("#finAddRcp"); if (ar) ar.onclick = () => addFromInput("#finNewRcp", FIN_RCP);
+  const nc = $("#finNewCat"); if (nc) nc.onkeydown = (e) => { if (e.key === "Enter") addFromInput("#finNewCat", FIN_CAT); };
+  const nr = $("#finNewRcp"); if (nr) nr.onkeydown = (e) => { if (e.key === "Enter") addFromInput("#finNewRcp", FIN_RCP); };
+  $$("[data-rmopt]").forEach(b => b.onclick = () => {
+    if (OS().db && OS().db.removeContentOpt) OS().db.removeContentOpt(b.dataset.rmopt);
+    reRender();
+  });
   const add = $("#finAdd");
   if (add) add.onclick = () => financeModal(null);
   $$("[data-fedit]").forEach(b => b.onclick = () => financeModal(records().find(r => r.id === b.dataset.fedit)));
