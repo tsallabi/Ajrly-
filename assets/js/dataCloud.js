@@ -38,6 +38,18 @@ function persistSnapshot(db) {
 /* Pull /api/sync and mirror tasks/content/owners into db. Returns the
    raw pull payload (incl. users) so callers can use the team list.
    On failure throws (caller should fall back to local + keep going). */
+/* Merge server rows into local WITHOUT losing locally-created rows. The server
+   row wins on id conflicts (latest edits), but any local row whose id the server
+   doesn't have is kept — so a refresh never deletes data that was logged locally
+   but hasn't reached the backend yet (e.g. the first hydrate after cloud turns
+   on, or a write that failed). Returns a fresh array (caller replaceInPlace's). */
+function mergeById(local, server) {
+  if (!Array.isArray(server)) return Array.isArray(local) ? local.slice() : [];
+  const serverIds = new Set(server.map((r) => r && r.id));
+  const localOnly = (local || []).filter((r) => r && r.id && !serverIds.has(r.id));
+  return [...localOnly, ...server]; // local-only (newest, unsynced) on top
+}
+
 export async function hydrateFromCloud(db) {
   if (!cloud.isCloud()) return null; // guarded no-op when cloud off
   const data = await cloud.pull();
@@ -47,22 +59,22 @@ export async function hydrateFromCloud(db) {
   // timer alive across a refresh instead of stopping it and zeroing the total.
   const timerSnap = {};
   (db.tasks || []).forEach((tk) => { if (tk && tk.id) timerSnap[tk.id] = { timerStart: tk.timerStart, timeLog: tk.timeLog }; });
-  replaceInPlace(db.tasks, data.tasks);
+  replaceInPlace(db.tasks, mergeById(db.tasks, data.tasks));
   db.tasks.forEach((tk) => {
     const s = timerSnap[tk.id]; if (!s) return;
     if (tk.timerStart === undefined && s.timerStart !== undefined) tk.timerStart = s.timerStart;
     if (tk.timeLog === undefined && s.timeLog !== undefined) tk.timeLog = s.timeLog;
   });
-  replaceInPlace(db.content, data.content);
-  replaceInPlace(db.owners, data.owners);
-  // optional tables: only replace when the server actually sent them, so a
+  replaceInPlace(db.content, mergeById(db.content, data.content));
+  replaceInPlace(db.owners, mergeById(db.owners, data.owners));
+  // optional tables: only merge when the server actually sent them, so a
   // missing/not-yet-migrated table never wipes the local copy on refresh.
-  if (Array.isArray(data.finance)) replaceInPlace(db.finance, data.finance);
-  if (Array.isArray(data.assetFolders)) replaceInPlace(db.assetFolders, data.assetFolders);
-  if (Array.isArray(data.assets)) replaceInPlace(db.assets, data.assets);
-  if (Array.isArray(data.activity)) replaceInPlace(db.activity, data.activity);
-  if (Array.isArray(data.contentPosts)) replaceInPlace(db.contentPosts, data.contentPosts);
-  if (Array.isArray(data.contentOpts)) replaceInPlace(db.contentOpts, data.contentOpts);
+  if (Array.isArray(data.finance)) replaceInPlace(db.finance, mergeById(db.finance, data.finance));
+  if (Array.isArray(data.assetFolders)) replaceInPlace(db.assetFolders, mergeById(db.assetFolders, data.assetFolders));
+  if (Array.isArray(data.assets)) replaceInPlace(db.assets, mergeById(db.assets, data.assets));
+  if (Array.isArray(data.activity)) replaceInPlace(db.activity, mergeById(db.activity, data.activity));
+  if (Array.isArray(data.contentPosts)) replaceInPlace(db.contentPosts, mergeById(db.contentPosts, data.contentPosts));
+  if (Array.isArray(data.contentOpts)) replaceInPlace(db.contentOpts, mergeById(db.contentOpts, data.contentOpts));
   persistSnapshot(db);
   return data;
 }
