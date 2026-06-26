@@ -41,7 +41,18 @@ function persistSnapshot(db) {
 export async function hydrateFromCloud(db) {
   if (!cloud.isCloud()) return null; // guarded no-op when cloud off
   const data = await cloud.pull();
+  // Preserve live task-timer fields the backend may not store yet. When the
+  // timer_start / time_log columns aren't migrated, the server omits them
+  // (key absent → undefined); restoring the local value keeps a running task
+  // timer alive across a refresh instead of stopping it and zeroing the total.
+  const timerSnap = {};
+  (db.tasks || []).forEach((tk) => { if (tk && tk.id) timerSnap[tk.id] = { timerStart: tk.timerStart, timeLog: tk.timeLog }; });
   replaceInPlace(db.tasks, data.tasks);
+  db.tasks.forEach((tk) => {
+    const s = timerSnap[tk.id]; if (!s) return;
+    if (tk.timerStart === undefined && s.timerStart !== undefined) tk.timerStart = s.timerStart;
+    if (tk.timeLog === undefined && s.timeLog !== undefined) tk.timeLog = s.timeLog;
+  });
   replaceInPlace(db.content, data.content);
   replaceInPlace(db.owners, data.owners);
   // optional tables: only replace when the server actually sent them, so a
