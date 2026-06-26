@@ -112,7 +112,23 @@ function cellInput(field, p) {
     const tint = v ? ` style="background:${colorFor(v)}"` : "";
     return `<select class="oc-cell" data-f="${field}"${tint} ${ro}>${opts}</select>`;
   }
+  if (field === "pubTime") {
+    const parts = String(v || "").split(":"); const hh = parts[0] || "", mm = parts[1] || "";
+    const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+    const mins = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+    const hSel = `<select class="oc-cell oc-time" data-pt="h" ${ro} style="min-width:58px"><option value=""></option>${hours.map(s => `<option ${hh === s ? "selected" : ""}>${s}</option>`).join("")}</select>`;
+    const mSel = `<select class="oc-cell oc-time" data-pt="m" ${ro} style="min-width:58px"><option value=""></option>${mins.map(s => `<option ${mm === s ? "selected" : ""}>${s}</option>`).join("")}</select>`;
+    return `<span class="flex" style="gap:4px;align-items:center;justify-content:center">${hSel}<b>:</b>${mSel}</span>`;
+  }
   return `<input class="oc-cell" data-f="${field}" value="${esc(v)}" ${ro} />`;
+}
+/* read all editable cells of a row into a post object (including the time selects) */
+function readRow(tr) {
+  const d = {};
+  tr.querySelectorAll("[data-f]").forEach(c => { if (c.value) d[c.dataset.f] = c.value; });
+  const h = tr.querySelector('[data-pt="h"]'), m = tr.querySelector('[data-pt="m"]');
+  if (h && h.value) d.pubTime = `${h.value}:${(m && m.value) || "00"}`;
+  return d;
 }
 function attachCellHTML(p) {
   const has = p && p.attachment;
@@ -324,9 +340,17 @@ function mount(ctx) {
 
   // inline edit: existing rows update in place; blank rows become real on first entry
   body.addEventListener("change", (e) => {
-    const cell = e.target.closest("[data-f]"); if (!cell) return;
-    const tr = cell.closest("tr"); const field = cell.dataset.f; const val = cell.value;
-    if (cell.tagName === "SELECT") cell.style.background = colorFor(val);  // recolour chip
+    const cell = e.target.closest("[data-f], .oc-time"); if (!cell) return;
+    const tr = cell.closest("tr");
+    let field, val;
+    if (cell.classList.contains("oc-time")) {
+      field = "pubTime";
+      const h = tr.querySelector('[data-pt="h"]').value, m = tr.querySelector('[data-pt="m"]').value;
+      val = h ? `${h}:${m || "00"}` : "";
+    } else {
+      field = cell.dataset.f; val = cell.value;
+      if (cell.tagName === "SELECT") cell.style.background = colorFor(val);  // recolour chip
+    }
     // picking a date: show compact d/m label, hide the picker, auto-fill the weekday
     let extra = null;
     if (field === "date") {
@@ -340,8 +364,7 @@ function mount(ctx) {
       db().updateContentPost(tr.dataset.id, patch); return;
     }
     // draft row → create a post from whatever is filled in this row
-    const data = {};
-    tr.querySelectorAll("[data-f]").forEach(c => { if (c.value) data[c.dataset.f] = c.value; });
+    const data = readRow(tr);
     if (!Object.keys(data).length) return;
     db().addContentPost(data);
     const id = (db().contentPosts[0] || {}).id;
