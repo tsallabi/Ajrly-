@@ -49,7 +49,7 @@ registerStrings({
     "fin.th.amount": "المبلغ",
     "fin.th.desc": "الوصف",
     "fin.th.receipt": "الإيصال",
-    "fin.f.rate": "سعر الصرف للدولار (1 = ؟ دولار)",
+    "fin.f.rate": "سعر الصرف (1 دولار = ؟ بهذه العملة)",
     "fin.f.usd": "القيمة بالدولار",
     "fin.sum.income": "إجمالي الإيرادات",
     "fin.sum.expense": "إجمالي المصروفات",
@@ -104,7 +104,7 @@ registerStrings({
     "fin.th.amount": "Amount",
     "fin.th.desc": "Description",
     "fin.th.receipt": "Receipt",
-    "fin.f.rate": "Exchange rate to USD (1 = ? USD)",
+    "fin.f.rate": "Exchange rate (1 USD = ? in this currency)",
     "fin.f.usd": "USD value",
     "fin.sum.income": "Total income",
     "fin.sum.expense": "Total expenses",
@@ -171,9 +171,11 @@ function money(amount, currency) {
   const n = num(amount).toLocaleString(getLang() === "ar" ? "ar-EG" : "en-GB", { maximumFractionDigits: 2 });
   return `${n} ${esc(currency || "LYD")}`;
 }
-/* USD per 1 unit of the record's currency (manual rate; USD defaults to 1) */
+/* Exchange rate is entered as "1 USD = ? units of this currency", so the
+   USD value is amount ÷ rate. USD defaults to a rate of 1. Rate 0/empty
+   means "unknown" → USD value 0 (skipped from USD totals). */
 const usdRate = (r) => (r && r.rate ? num(r.rate) : ((r && (r.currency || "") === "USD") ? 1 : 0));
-const usdOf = (r) => num(r && r.amount) * usdRate(r);
+const usdOf = (r) => { const rate = usdRate(r); return rate ? num(r && r.amount) / rate : 0; };
 /* totals converted to USD across all currencies */
 function usdTotals(list) {
   let income = 0, expense = 0, any = false;
@@ -459,7 +461,7 @@ function financeModal(rec) {
         <div class="field"><label>${esc(t("fin.f.currency"))}</label><select id="fin_currency">${CURRENCIES.map(c => opt(c, x.currency || "LYD", c)).join("")}</select></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>${esc(t("fin.f.rate"))}</label><input type="number" step="any" min="0" id="fin_rate" value="${esc(x.rate || ((x.currency || "LYD") === "USD" ? "1" : ""))}" placeholder="1 = ? USD" /></div>
+        <div class="field"><label>${esc(t("fin.f.rate"))}</label><input type="number" step="any" min="0" id="fin_rate" value="${esc(x.rate || ((x.currency || "LYD") === "USD" ? "1" : ""))}" placeholder="1 USD = ?" /></div>
         <div class="field"><label>${esc(t("fin.f.usd"))}</label><input id="fin_usd" disabled /></div>
       </div>
       <div class="field"><label>${esc(t("fin.f.desc"))}</label><textarea id="fin_desc">${esc(x.description || "")}</textarea></div>
@@ -488,9 +490,10 @@ function financeModal(rec) {
   };
   renderAtt();
 
-  // live USD value = amount × exchange rate
+  // live USD value = amount ÷ exchange rate (1 USD = ? units)
   const recalcUsd = () => {
-    const usd = num($("#fin_amount") && $("#fin_amount").value) * num($("#fin_rate") && $("#fin_rate").value);
+    const rate = num($("#fin_rate") && $("#fin_rate").value);
+    const usd = rate ? num($("#fin_amount") && $("#fin_amount").value) / rate : 0;
     const box = $("#fin_usd"); if (box) box.value = usd ? money(usd, "USD") : "—";
   };
   const amt = $("#fin_amount"), rate = $("#fin_rate"), ccy = $("#fin_currency");
