@@ -343,6 +343,8 @@ function summaryCards() {
 function table() {
   let list = records().filter(r => (r.kind || "expense") === finTab);
   if (finCatFilter) list = list.filter(r => (r.category || "") === finCatFilter);
+  // newest date on top, oldest at the bottom (stable: ties keep insertion order)
+  list = list.slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
   const showPaid = finTab === "expense";
   if (!list.length) {
     return `<div class="card"><div class="empty">
