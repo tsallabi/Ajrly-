@@ -8,11 +8,11 @@ import { currentUser, hasUsers, login, register, logout, can, teamNames } from "
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=33";
-import "./modules/assets.js?v=33";
-import "./modules/account.js?v=33";
-import "./modules/team.js?v=33";
-import "./modules/performance.js?v=33";
+import "./modules/finance.js?v=34";
+import "./modules/assets.js?v=34";
+import "./modules/account.js?v=34";
+import "./modules/team.js?v=34";
+import "./modules/performance.js?v=34";
 import cloud from "./cloud.js";
 import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js";
 import AjrlyPresence from "./presence.js"; // also sets window.AjrlyPresence
@@ -366,6 +366,15 @@ function rollRecurringTasks() {
     changed = true;
   });
   return changed;
+}
+
+/* Record that the current user was active today (once per day, deduped). */
+function markActive() {
+  const u = activeUser(); if (!u) return;
+  const day = todayISO();
+  const uid = u.id || u.name, uname = u.name || "";
+  const seen = (db.activity || []).some(a => a.day === day && (a.userId === uid || a.userName === uname));
+  if (!seen) db.addActivity({ userId: uid, userName: uname, day });
 }
 
 function stopTimerTicker() { if (timerTick) { clearInterval(timerTick); timerTick = null; } }
@@ -1097,6 +1106,7 @@ function renderAuthScreen() {
         if (res.error) { err.textContent = t("auth.err." + res.error) || res.error; btn.disabled = false; return; }
       }
       authMode = null;
+      try { markActive(); } catch (_) {}
       toast(t("auth.signedIn"));
       location.hash = "#/dashboard";
       render();
@@ -1245,6 +1255,7 @@ async function boot() {
     }
   } catch (_) { cloudReady = false; }
   bootDone = true;   // enable recurring-task rolling now that data is loaded
+  try { markActive(); } catch (_) {}
   render();
 }
 try {

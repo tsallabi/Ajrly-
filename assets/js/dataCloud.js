@@ -29,7 +29,7 @@ function persistSnapshot(db) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       tasks: db.tasks, content: db.content, owners: db.owners, finance: db.finance,
-      assetFolders: db.assetFolders, assets: db.assets,
+      assetFolders: db.assetFolders, assets: db.assets, activity: db.activity,
     }));
   } catch (_) { /* ignore quota/availability */ }
 }
@@ -48,6 +48,7 @@ export async function hydrateFromCloud(db) {
   if (Array.isArray(data.finance)) replaceInPlace(db.finance, data.finance);
   if (Array.isArray(data.assetFolders)) replaceInPlace(db.assetFolders, data.assetFolders);
   if (Array.isArray(data.assets)) replaceInPlace(db.assets, data.assets);
+  if (Array.isArray(data.activity)) replaceInPlace(db.activity, data.activity);
   persistSnapshot(db);
   return data;
 }
@@ -144,6 +145,11 @@ export function wireWriteThrough(db, onError) {
     cloud.updateAsset(id, patch).then((row) => mergeServerRow(db.assets, id, row)).catch(report);
   });
   wrap("removeAsset", (id) => { cloud.removeAsset(id).catch(report); });
+
+  wrap("addActivity", (a) => {
+    const local = newest(db.activity);
+    cloud.createActivity(a).then((row) => mergeServerRow(db.activity, local && local.id, row)).catch(report);
+  });
 
   try { Object.defineProperty(db, "__cloudWired", { value: true, enumerable: false }); } catch (_) {}
   return true;

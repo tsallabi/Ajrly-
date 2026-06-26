@@ -168,6 +168,17 @@ export const ASSET_FOLDERS = {
   ],
 };
 
+export const ACTIVITY = {
+  table: "activity_days",
+  prefix: "ac",
+  order: "day DESC",
+  fields: [
+    { col: "user_id", key: "userId" },
+    { col: "user_name", key: "userName" },
+    { col: "day", key: "day" },
+  ],
+};
+
 export const ASSETS = {
   table: "assets",
   prefix: "as",

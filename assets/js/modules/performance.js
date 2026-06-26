@@ -47,6 +47,7 @@ registerStrings({
     "pf.m.min": "د",
 
     "pf.heatmap": "نشاط آخر 8 أسابيع",
+    "pf.calendar": "النشاط الشهري",
     "pf.local.note": "وضع محلي — مؤشرات أساسية من المهام فقط",
     "pf.empty": "لا توجد بيانات أداء",
     "pf.na": "—",
@@ -79,6 +80,7 @@ registerStrings({
     "pf.m.min": "min",
 
     "pf.heatmap": "Activity — last 8 weeks",
+    "pf.calendar": "Monthly activity",
     "pf.local.note": "Local mode — basic metrics from tasks only",
     "pf.empty": "No performance data",
     "pf.na": "—",
@@ -338,10 +340,49 @@ function employeeCard(u) {
       ${metricRow(t("pf.m.active"), num(u.activeMinutes))}
     </div>
     <div class="pf-heat-wrap">
-      <span class="muted pf-heat-cap">${esc(t("pf.heatmap"))}</span>
-      ${heatmapSVG(u)}
+      ${monthlyCalendar(u)}
     </div>
   </div>`;
+}
+/* Monthly attendance calendar — current month, days numbered, days the user
+   was active (logged into the system) highlighted. */
+function activeDaysFor(u) {
+  const acts = (OS().db && OS().db.activity) || [];
+  const set = new Set();
+  acts.forEach(a => {
+    if (a.userId === u.id || a.userName === u.name || a.userId === u.name) {
+      const d = String(a.day || "").slice(0, 10);
+      if (d) set.add(d);
+    }
+  });
+  return set;
+}
+function monthlyCalendar(u) {
+  const active = activeDaysFor(u);
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth(), todayD = now.getDate();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startDow = new Date(year, month, 1).getDay(); // 0=Sun
+  const dows = (getLang() === "ar")
+    ? ["أحد", "إثن", "ثلا", "أرب", "خمي", "جمع", "سبت"]
+    : ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  const cell = (inner, style) => `<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:7px;font-size:11.5px;${style || ""}">${inner}</div>`;
+  const head = dows.map(d => cell(d, "color:var(--muted,#94a3b8);font-size:10px")).join("");
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(cell("", "visibility:hidden"));
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const on = active.has(iso);
+    const isToday = d === todayD;
+    const style = on
+      ? "background:var(--brand);color:#fff;font-weight:600"
+      : "background:var(--surface-2);color:var(--muted,#94a3b8)";
+    const ring = isToday ? "box-shadow:0 0 0 2px var(--brand) inset;" : "";
+    cells.push(cell(String(d), ring + style));
+  }
+  const title = now.toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-GB", { month: "long", year: "numeric" });
+  return `<span class="muted pf-heat-cap">📅 ${esc(t("pf.calendar"))} — ${esc(title)}</span>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:6px">${head}${cells.join("")}</div>`;
 }
 function initials(name) {
   const parts = String(name || "").trim().split(/\s+/);
