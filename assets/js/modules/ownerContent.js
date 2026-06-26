@@ -76,9 +76,12 @@ const isoOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, 
 const selectedMonday = () => addDays(mondayOf(new Date()), weekOff * 7);
 function weekLabel(mon) {
   const lang = getLang();
-  const monthName = mon.toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB", { month: "long" });
-  const wk = Math.ceil(mon.getDate() / 7);
-  return lang === "ar" ? `${monthName} الأسبوع ${wk}` : `${monthName} WK ${wk}`;
+  const loc = lang === "ar" ? "ar-EG" : "en-GB";
+  const word = lang === "ar" ? "الأسبوع" : "Week";
+  const part = (d) => `${d.toLocaleDateString(loc, { month: "long" })} ${word} ${Math.ceil(d.getDate() / 7)}`;
+  const sun = addDays(mon, 6);
+  // a week that crosses into the next month shows both, e.g. "June Week 5 - July Week 1"
+  return mon.getMonth() === sun.getMonth() ? part(mon) : `${part(mon)} - ${part(sun)}`;
 }
 
 /* deterministic translucent colour for a value (readable in both themes) */
