@@ -37,9 +37,12 @@ registerStrings({
     "fin.th.amount": "المبلغ",
     "fin.th.desc": "الوصف",
     "fin.th.receipt": "الإيصال",
+    "fin.f.rate": "سعر الصرف للدولار (1 = ؟ دولار)",
+    "fin.f.usd": "القيمة بالدولار",
     "fin.sum.income": "إجمالي الإيرادات",
     "fin.sum.expense": "إجمالي المصروفات",
     "fin.sum.net": "الصافي",
+    "fin.sum.usdAll": "الصافي بالدولار (كل العملات)",
     "fin.chart.title": "ملخص السنة (شهرياً)",
     "fin.empty.expense": "لا توجد مصروفات بعد",
     "fin.empty.income": "لا توجد إيرادات بعد",
@@ -76,9 +79,12 @@ registerStrings({
     "fin.th.amount": "Amount",
     "fin.th.desc": "Description",
     "fin.th.receipt": "Receipt",
+    "fin.f.rate": "Exchange rate to USD (1 = ? USD)",
+    "fin.f.usd": "USD value",
     "fin.sum.income": "Total income",
     "fin.sum.expense": "Total expenses",
     "fin.sum.net": "Net",
+    "fin.sum.usdAll": "Net in USD (all currencies)",
     "fin.chart.title": "Yearly summary (monthly)",
     "fin.empty.expense": "No expenses yet",
     "fin.empty.income": "No income yet",
@@ -116,6 +122,18 @@ const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 function money(amount, currency) {
   const n = num(amount).toLocaleString(getLang() === "ar" ? "ar-EG" : "en-GB", { maximumFractionDigits: 2 });
   return `${n} ${esc(currency || "LYD")}`;
+}
+/* USD per 1 unit of the record's currency (manual rate; USD defaults to 1) */
+const usdRate = (r) => (r && r.rate ? num(r.rate) : ((r && (r.currency || "") === "USD") ? 1 : 0));
+const usdOf = (r) => num(r && r.amount) * usdRate(r);
+/* totals converted to USD across all currencies */
+function usdTotals() {
+  let income = 0, expense = 0, any = false;
+  records().forEach(r => {
+    const u = usdOf(r);
+    if (u) { any = true; if ((r.kind || "expense") === "income") income += u; else expense += u; }
+  });
+  return { income, expense, any };
 }
 
 /* per-currency { income, expense } across all records */
@@ -227,8 +245,23 @@ function summaryCards() {
         ▼ ${esc(t("fin.sum.expense"))}: ${money(by[c].expense, c)}
       </div>
     </div>`;
-  }).join("");
-  return `<div class="grid cards-3" style="margin-bottom:16px">${cards}</div>`;
+  });
+  // unified total converted to USD (uses each transaction's exchange rate)
+  const u = usdTotals();
+  if (u.any) {
+    const net = u.income - u.expense;
+    const netColor = net >= 0 ? "var(--st-complete)" : "var(--st-overdue, #ef4444)";
+    cards.unshift(`<div class="card stat" style="border:1.5px solid var(--brand)">
+      <div class="stat__top"><span class="stat__icon" style="background:var(--brand);color:#fff">$</span></div>
+      <span class="stat__value" style="color:${netColor}">${money(net, "USD")}</span>
+      <span class="stat__label">${esc(t("fin.sum.usdAll"))}</span>
+      <div class="muted" style="margin-top:6px;font-size:12.5px">
+        ▲ ${esc(t("fin.sum.income"))}: ${money(u.income, "USD")}<br>
+        ▼ ${esc(t("fin.sum.expense"))}: ${money(u.expense, "USD")}
+      </div>
+    </div>`);
+  }
+  return `<div class="grid cards-3" style="margin-bottom:16px">${cards.join("")}</div>`;
 }
 
 function table() {
@@ -247,7 +280,7 @@ function table() {
       <td><div class="cell-title">${esc(r.name || "—")}</div></td>
       <td>${fmtDate(r.date)}</td>
       <td>${r.category ? esc(r.category) : "—"}</td>
-      <td style="white-space:nowrap;font-variant-numeric:tabular-nums"><b>${money(r.amount, r.currency)}</b></td>
+      <td style="white-space:nowrap;font-variant-numeric:tabular-nums"><b>${money(r.amount, r.currency)}</b>${(r.currency !== "USD" && usdRate(r)) ? `<div class="muted" style="font-size:11.5px">≈ ${money(usdOf(r), "USD")}</div>` : ""}</td>
       <td><div class="muted" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.description || "")}</div></td>
       <td>${att}</td>
       <td><div class="row-actions">
@@ -299,6 +332,10 @@ function financeModal(rec) {
         <div class="field"><label>${esc(t("fin.f.amount"))}</label><input type="number" step="any" min="0" id="fin_amount" value="${esc(x.amount || "")}" /></div>
         <div class="field"><label>${esc(t("fin.f.currency"))}</label><select id="fin_currency">${CURRENCIES.map(c => opt(c, x.currency || "LYD", c)).join("")}</select></div>
       </div>
+      <div class="field-row">
+        <div class="field"><label>${esc(t("fin.f.rate"))}</label><input type="number" step="any" min="0" id="fin_rate" value="${esc(x.rate || ((x.currency || "LYD") === "USD" ? "1" : ""))}" placeholder="1 = ? USD" /></div>
+        <div class="field"><label>${esc(t("fin.f.usd"))}</label><input id="fin_usd" disabled /></div>
+      </div>
       <div class="field"><label>${esc(t("fin.f.desc"))}</label><textarea id="fin_desc">${esc(x.description || "")}</textarea></div>
       <div class="field">
         <label>${esc(t("fin.f.attachment"))}</label>
@@ -325,6 +362,17 @@ function financeModal(rec) {
   };
   renderAtt();
 
+  // live USD value = amount × exchange rate
+  const recalcUsd = () => {
+    const usd = num($("#fin_amount") && $("#fin_amount").value) * num($("#fin_rate") && $("#fin_rate").value);
+    const box = $("#fin_usd"); if (box) box.value = usd ? money(usd, "USD") : "—";
+  };
+  const amt = $("#fin_amount"), rate = $("#fin_rate"), ccy = $("#fin_currency");
+  if (amt) amt.oninput = recalcUsd;
+  if (rate) rate.oninput = recalcUsd;
+  if (ccy) ccy.onchange = () => { if (ccy.value === "USD" && rate && !num(rate.value)) rate.value = "1"; recalcUsd(); };
+  recalcUsd();
+
   const file = $("#fin_file");
   if (file) file.onchange = () => {
     const f = file.files && file.files[0];
@@ -344,6 +392,7 @@ function financeModal(rec) {
       category: $("#fin_cat").value.trim(),
       amount: $("#fin_amount").value,
       currency: $("#fin_currency").value,
+      rate: $("#fin_rate").value,
       description: $("#fin_desc").value.trim(),
       attachment: att ? att.data : "",
       attachmentName: att ? att.name : "",
