@@ -36,6 +36,9 @@ const seedFinance = [];
 const seedAssetFolders = [];
 const seedAssets = [];
 
+/* ---- Seed: Activity days (per-user attendance), starts empty ---- */
+const seedActivity = [];
+
 /* ---- Static reference: Content pillars (from Pillar matrix) ---- */
 export const PILLARS = [
   { name: "Property Discovery", sub: "Core Product", icon: "🔍", purpose: "Help renters discover properties and inspire bookings." },
@@ -69,7 +72,7 @@ export const LINKS = [
 ];
 
 /* ---- Store ---- */
-const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets });
+const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets, activity: seedActivity });
 
 let state = load();
 
@@ -119,6 +122,9 @@ export const db = {
   addAsset(a) { state.assets.unshift({ ...a, id: uid("as") }); persist(); },
   updateAsset(id, patch) { state.assets = state.assets.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
   removeAsset(id) { state.assets = state.assets.filter(x => x.id !== id); persist(); },
+
+  get activity() { return state.activity; },
+  addActivity(a) { state.activity.unshift({ ...a, id: uid("ac") }); persist(); },
 
   reset() { state = defaultState(); persist(); },
   exportJSON() { return JSON.stringify(state, null, 2); },

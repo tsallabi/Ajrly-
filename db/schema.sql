@@ -105,6 +105,17 @@ CREATE TABLE IF NOT EXISTS finance (
 );
 CREATE INDEX IF NOT EXISTS idx_finance_kind ON finance(kind, date);
 
+-- ---- Activity days (per-user attendance for the monthly calendar) ----
+CREATE TABLE IF NOT EXISTS activity_days (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT,
+  user_name  TEXT,
+  day        TEXT,                                   -- YYYY-MM-DD the user was active
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_activity_user_day ON activity_days(user_id, day);
+
 -- ---- Business Assets (named folders + files stored in R2) ----
 CREATE TABLE IF NOT EXISTS asset_folders (
   id          TEXT PRIMARY KEY,

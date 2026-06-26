@@ -124,6 +124,7 @@ export async function pull() {
     finance: data.finance,             // may be undefined (table absent) — caller guards
     assetFolders: data.assetFolders,
     assets: data.assets,
+    activity: data.activity,
     users: data.users || [],
     ts: data.ts || Date.now(),
   };
@@ -149,6 +150,7 @@ const _owners = makeCrud("owners");
 const _finance = makeCrud("finance");
 const _assetFolders = makeCrud("assets/folders");
 const _assets = makeCrud("assets");
+const _activity = makeCrud("activity");
 
 /* Tasks */
 export const createTask = (p) => _tasks.create(p);
@@ -173,6 +175,8 @@ export const removeAssetFolder = (id) => _assetFolders.remove(id);
 export const createAsset = (p) => _assets.create(p);
 export const updateAsset = (id, p) => _assets.update(id, p);
 export const removeAsset = (id) => _assets.remove(id);
+/* Activity (attendance days) — create only */
+export const createActivity = (p) => _activity.create(p);
 
 /* Clean default export for ergonomic importing. */
 const cloud = {
@@ -187,5 +191,6 @@ const cloud = {
   createFinance, updateFinance, removeFinance,
   createAssetFolder, updateAssetFolder, removeAssetFolder,
   createAsset, updateAsset, removeAsset,
+  createActivity,
 };
 export default cloud;
