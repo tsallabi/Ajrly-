@@ -53,6 +53,8 @@ function mergeById(local, server) {
 export async function hydrateFromCloud(db) {
   if (!cloud.isCloud()) return null; // guarded no-op when cloud off
   const data = await cloud.pull();
+  // snapshot the local copy before any merge so a bad sync is always recoverable
+  try { if (db.backup) db.backup("before-sync"); } catch (_) {}
   // Preserve live task-timer fields the backend may not store yet. When the
   // timer_start / time_log columns aren't migrated, the server omits them
   // (key absent → undefined); restoring the local value keeps a running task

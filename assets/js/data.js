@@ -88,8 +88,50 @@ function load() {
   return defaultState();
 }
 
+let _lastAutoBackup = 0;
 function persist() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+  // periodic safety snapshot (throttled) — survives cloud sync overwrites
+  try {
+    const now = Date.now();
+    if (now - _lastAutoBackup > 180000) { _lastAutoBackup = now; pushBackup("autosave"); }
+  } catch (_) { /* never let backup break a save */ }
+}
+
+/* ---- Local backups: timestamped snapshots in a SEPARATE key that cloud
+   hydrate never reads or overwrites, so data can always be rolled back. ---- */
+const BACKUP_KEY = "ajrly_os_backups";
+const MAX_BACKUPS = 10;
+function readBackups() {
+  try { const r = localStorage.getItem(BACKUP_KEY); const a = r ? JSON.parse(r) : []; return Array.isArray(a) ? a : []; }
+  catch (_) { return []; }
+}
+function writeBackups(list) {
+  let arr = list.slice(0, MAX_BACKUPS);
+  while (arr.length) { // drop oldest until it fits the quota
+    try { localStorage.setItem(BACKUP_KEY, JSON.stringify(arr)); return true; }
+    catch (_) { arr = arr.slice(0, arr.length - 1); }
+  }
+  return false;
+}
+/* strip big data: URLs (receipts/attachments) from backups so the structured
+   records always fit; full-fidelity copies come from Export instead. */
+function stripHeavy(v) {
+  if (Array.isArray(v)) return v.map(stripHeavy);
+  if (v && typeof v === "object") { const o = {}; for (const k in v) o[k] = stripHeavy(v[k]); return o; }
+  if (typeof v === "string" && v.startsWith("data:") && v.length > 2000) return "";
+  return v;
+}
+function pushBackup(reason) {
+  let snap; try { snap = stripHeavy(JSON.parse(JSON.stringify(state))); } catch (_) { return false; }
+  const counts = {
+    finance: (snap.finance || []).length, tasks: (snap.tasks || []).length,
+    owners: (snap.owners || []).length, content: (snap.content || []).length,
+    contentPosts: (snap.contentPosts || []).length,
+  };
+  const list = readBackups();
+  list.unshift({ ts: new Date().toISOString(), reason: reason || "auto", counts, data: snap });
+  return writeBackups(list);
 }
 
 const uid = (p) => p + Math.random().toString(36).slice(2, 8);
@@ -142,4 +184,24 @@ export const db = {
 
   reset() { state = defaultState(); persist(); },
   exportJSON() { return JSON.stringify(state, null, 2); },
+
+  /* ---- backup / restore ---- */
+  backup(reason) { return pushBackup(reason); },
+  listBackups() { return readBackups().map(({ ts, reason, counts }) => ({ ts, reason, counts })); },
+  restoreBackup(ts) {
+    const e = readBackups().find(x => x.ts === ts);
+    if (!e || !e.data) return { error: "notfound" };
+    pushBackup("before-restore");
+    state = { ...defaultState(), ...e.data };
+    persist();
+    return { ok: true };
+  },
+  importJSON(text) {
+    let obj; try { obj = typeof text === "string" ? JSON.parse(text) : text; } catch (_) { return { error: "parse" }; }
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return { error: "parse" };
+    pushBackup("before-import");
+    state = { ...defaultState(), ...obj };
+    persist();
+    return { ok: true };
+  },
 };
