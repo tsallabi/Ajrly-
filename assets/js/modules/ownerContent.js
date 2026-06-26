@@ -73,7 +73,8 @@ function colorFor(v) {
   let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return `hsla(${h % 360},65%,55%,0.20)`;
 }
-const weekdayName = (iso) => { try { return new Date(iso + "T00:00:00").toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-GB", { weekday: "short" }); } catch (_) { return ""; } };
+const DOW2 = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const weekdayName = (iso) => { const d = new Date(iso + "T00:00:00"); return isNaN(d) ? "" : DOW2[d.getDay()]; };
 const fmtDM = (iso) => { const p = String(iso || "").split("-"); return p.length === 3 ? `${+p[2]}/${+p[1]}` : ""; };
 
 const DEFAULTS = {
