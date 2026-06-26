@@ -116,9 +116,11 @@ function cellInput(field, p) {
     const parts = String(v || "").split(":"); const hh = parts[0] || "", mm = parts[1] || "";
     const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
     const mins = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
-    const hSel = `<select class="oc-cell oc-time" data-pt="h" ${ro} style="min-width:58px"><option value=""></option>${hours.map(s => `<option ${hh === s ? "selected" : ""}>${s}</option>`).join("")}</select>`;
-    const mSel = `<select class="oc-cell oc-time" data-pt="m" ${ro} style="min-width:58px"><option value=""></option>${mins.map(s => `<option ${mm === s ? "selected" : ""}>${s}</option>`).join("")}</select>`;
-    return `<span class="flex" style="gap:4px;align-items:center;justify-content:center">${hSel}<b>:</b>${mSel}</span>`;
+    const hSel = `<select class="oc-cell oc-time" data-pt="h" ${ro} style="min-width:56px"><option value=""></option>${hours.map(s => `<option ${hh === s ? "selected" : ""}>${s}</option>`).join("")}</select>`;
+    const mSel = `<select class="oc-cell oc-time" data-pt="m" ${ro} style="min-width:56px"><option value=""></option>${mins.map(s => `<option ${mm === s ? "selected" : ""}>${s}</option>`).join("")}</select>`;
+    const shown = hh ? `${hh}:${mm || "00"}` : "";
+    return `<span class="oc-timelabel" style="cursor:pointer;display:inline-block;min-width:50px;text-align:center;padding:6px 4px">${esc(shown) || "⏰"}</span>` +
+      `<span class="oc-timeedit flex" style="display:none;gap:4px;align-items:center;justify-content:center">${hSel}<b>:</b>${mSel}</span>`;
   }
   return `<input class="oc-cell" data-f="${field}" value="${esc(v)}" ${ro} />`;
 }
@@ -347,6 +349,8 @@ function mount(ctx) {
       field = "pubTime";
       const h = tr.querySelector('[data-pt="h"]').value, m = tr.querySelector('[data-pt="m"]').value;
       val = h ? `${h}:${m || "00"}` : "";
+      const lbl = cell.closest("td").querySelector(".oc-timelabel");
+      if (lbl) lbl.textContent = val || "⏰";
     } else {
       field = cell.dataset.f; val = cell.value;
       if (cell.tagName === "SELECT") cell.style.background = colorFor(val);  // recolour chip
@@ -374,12 +378,27 @@ function mount(ctx) {
     if (!body.querySelector("tr[data-draft]")) { for (let i = 0; i < 3; i++) body.insertAdjacentHTML("beforeend", rowHTML(null)); }
   });
 
-  // revert the date picker back to its compact label when it loses focus
+  // collapse the date picker / time pickers back to their compact box on blur
   body.addEventListener("focusout", (e) => {
-    const inp = e.target.closest && e.target.closest(".oc-datein"); if (!inp) return;
-    const lbl = inp.parentNode.querySelector(".oc-datelabel");
-    if (lbl) { lbl.textContent = fmtDM(inp.value) || "📅"; lbl.style.display = ""; }
-    inp.style.display = "none";
+    const dinp = e.target.closest && e.target.closest(".oc-datein");
+    if (dinp) {
+      const lbl = dinp.parentNode.querySelector(".oc-datelabel");
+      if (lbl) { lbl.textContent = fmtDM(dinp.value) || "📅"; lbl.style.display = ""; }
+      dinp.style.display = "none"; return;
+    }
+    const tsel = e.target.closest && e.target.closest(".oc-time");
+    if (tsel) {
+      const td = tsel.closest("td");
+      setTimeout(() => {
+        const edit = td.querySelector(".oc-timeedit");
+        if (edit && !edit.contains(document.activeElement)) {
+          const h = td.querySelector('[data-pt="h"]').value, m = td.querySelector('[data-pt="m"]').value;
+          const lbl = td.querySelector(".oc-timelabel");
+          if (lbl) { lbl.textContent = h ? `${h}:${m || "00"}` : "⏰"; lbl.style.display = ""; }
+          edit.style.display = "none";
+        }
+      }, 0);
+    }
   });
 
   body.addEventListener("click", (e) => {
@@ -390,6 +409,14 @@ function mount(ctx) {
       const inp = lbl.parentNode.querySelector(".oc-datein");
       lbl.style.display = "none"; inp.style.display = ""; inp.focus();
       if (inp.showPicker) { try { inp.showPicker(); } catch (_) {} }
+      return;
+    }
+    // click the compact time box → reveal the hour/minute dropdowns
+    const tlbl = e.target.closest(".oc-timelabel");
+    if (tlbl && W()) {
+      const edit = tlbl.parentNode.querySelector(".oc-timeedit");
+      tlbl.style.display = "none"; edit.style.display = "";
+      const h = edit.querySelector('[data-pt="h"]'); if (h) h.focus();
       return;
     }
     if (e.target.closest(".oc-del")) {
