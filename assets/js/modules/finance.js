@@ -192,9 +192,10 @@ function usdTotals(list) {
   return { income, expense, any };
 }
 
-/* ---- summary month filter (auto-built from logged data) ---- */
+/* ---- summary filters (auto-built from logged data) ---- */
 const inMonth = (r) => !finMonth || String(r.date || "").slice(0, 7) === finMonth;
-const summaryRecords = () => records().filter(inMonth);
+const inCat = (r) => !finCatFilter || (r.category || "") === finCatFilter;
+const summaryRecords = () => records().filter(r => inMonth(r) && inCat(r));
 function monthsPresent() {
   const set = new Set();
   records().forEach(r => { const m = String(r.date || "").slice(0, 7); if (/^\d{4}-\d{2}$/.test(m)) set.add(m); });
@@ -244,6 +245,7 @@ function monthly(year, ccy) {
   const inc = Array(12).fill(0), exp = Array(12).fill(0);
   records().forEach(r => {
     if ((r.currency || "LYD") !== ccy) return;
+    if (!inCat(r)) return;
     const d = r.date || "";
     if (d.slice(0, 4) !== String(year)) return;
     const m = parseInt(d.slice(5, 7), 10) - 1;
@@ -307,8 +309,12 @@ function summaryCards() {
     <option value="">${esc(t("fin.allTime"))}</option>
     ${months.map(m => `<option value="${m}" ${finMonth === m ? "selected" : ""}>${esc(monthLabel(m))}</option>`).join("")}
   </select>`;
-  const head = `<div class="toolbar" style="margin-bottom:10px"><div class="toolbar__left">
-    <span class="muted">${esc(t("fin.summaryFor"))}</span> ${monthSel}
+  const catChip = finCatFilter
+    ? `<span class="flex" style="gap:6px;align-items:center;background:var(--brand-soft);color:var(--brand);border-radius:999px;padding:4px 6px 4px 12px;font-size:12.5px;font-weight:600">
+        ${esc(finCatFilter)}<button class="icon-btn" id="finClearCat" title="✕" style="width:20px;height:20px;line-height:1;padding:0;font-size:12px">✕</button></span>`
+    : "";
+  const head = `<div class="toolbar" style="margin-bottom:10px"><div class="toolbar__left" style="gap:8px;align-items:center;flex-wrap:wrap">
+    <span class="muted">${esc(t("fin.summaryFor"))}</span> ${monthSel} ${catChip}
   </div></div>`;
 
   const recs = summaryRecords();
@@ -584,6 +590,7 @@ function mount(ctx) {
   const cs = $("#finCcy"); if (cs) cs.onchange = (e) => { finCcy = e.target.value; reRender(); };
   const ms = $("#finMonth"); if (ms) ms.onchange = (e) => { finMonth = e.target.value; reRender(); };
   const cf = $("#finCatFilter"); if (cf) cf.onchange = (e) => { finCatFilter = e.target.value; reRender(); };
+  const ccl = $("#finClearCat"); if (ccl) ccl.onclick = () => { finCatFilter = ""; reRender(); };
 
   // settings: manage the editable dropdowns
   const sb = $("#finSettingsBtn"); if (sb) sb.onclick = () => { finSettings = !finSettings; reRender(); };
