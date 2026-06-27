@@ -90,10 +90,13 @@ export function ensureSchema(env) {
     for (const sql of SCHEMA_STATEMENTS) {
       try { await env.DB.prepare(sql).run(); } catch (_) { /* ignore individual */ }
     }
+<<<<<<< HEAD
     // add any columns missing from pre-existing tables (errors = already there)
     for (const sql of SCHEMA_ALTERS) {
       try { await env.DB.prepare(sql).run(); } catch (_) { /* column exists → ignore */ }
     }
+=======
+>>>>>>> origin/main
     return true;
   })();
   return _ensured;
