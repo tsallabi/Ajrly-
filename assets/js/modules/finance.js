@@ -58,6 +58,11 @@ registerStrings({
     "fin.sum.expense": "إجمالي المصروفات",
     "fin.sum.net": "الصافي",
     "fin.sum.usdAll": "الصافي بالدولار (كل العملات)",
+    "fin.print": "طباعة تقرير",
+    "fin.report.title": "تقرير المالية — أجرلي",
+    "fin.report.generated": "أُنشئ في", "fin.report.entries": "حركة",
+    "fin.report.summary": "الملخص", "fin.report.all": "كل الحركات", "fin.report.type": "النوع",
+    "fin.report.popup": "اسمح بالنوافذ المنبثقة لإنشاء التقرير",
     "fin.summaryFor": "ملخص:", "fin.allTime": "كل الفترات", "fin.empty.month": "لا توجد حركات في هذا الشهر",
     "fin.chart.title": "ملخص السنة (شهرياً)",
     "fin.empty.expense": "لا توجد مصروفات بعد",
@@ -116,6 +121,11 @@ registerStrings({
     "fin.sum.expense": "Total expenses",
     "fin.sum.net": "Net",
     "fin.sum.usdAll": "Net in USD (all currencies)",
+    "fin.print": "Print report",
+    "fin.report.title": "Finance Report — Ajrly",
+    "fin.report.generated": "Generated", "fin.report.entries": "entries",
+    "fin.report.summary": "Summary", "fin.report.all": "All transactions", "fin.report.type": "Type",
+    "fin.report.popup": "Allow pop-ups to generate the report",
     "fin.summaryFor": "Summary:", "fin.allTime": "All time", "fin.empty.month": "No entries in this month",
     "fin.chart.title": "Yearly summary (monthly)",
     "fin.empty.expense": "No expenses yet",
@@ -354,6 +364,61 @@ function summaryCards() {
   return head + `<div class="grid cards-3" style="margin-bottom:16px">${cards.join("")}</div>`;
 }
 
+/* ---------------- printable report (full income + expenditure log) ---------------- */
+function printReport() {
+  const rtl = getLang() === "ar";
+  const loc = rtl ? "ar-EG" : "en-GB";
+  const all = records().slice().sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  const by = totals();           // per-currency across ALL records
+  const u = usdTotals();
+  const ccyRows = Object.keys(by).map(c => {
+    const net = by[c].income - by[c].expense;
+    return `<tr><td>${esc(c)}</td><td class="num">${esc(money(by[c].income, c))}</td><td class="num">${esc(money(by[c].expense, c))}</td><td class="num">${esc(money(net, c))}</td></tr>`;
+  }).join("");
+  const rows = all.map(r => {
+    const usd = (r.currency !== "USD" && usdRate(r)) ? money(usdOf(r), "USD") : (r.currency === "USD" ? money(r.amount, "USD") : "—");
+    const kind = (r.kind || "expense") === "income" ? t("fin.tab.income") : t("fin.tab.expense");
+    return `<tr>
+      <td>${esc(r.date || "")}</td><td>${esc(kind)}</td><td>${esc(r.name || "")}</td>
+      <td>${esc(r.category || "")}</td><td>${esc(r.paidTo || "")}</td>
+      <td class="num">${esc(money(r.amount, r.currency))}</td><td class="num">${esc(usd)}</td>
+      <td>${esc(r.description || "")}</td></tr>`;
+  }).join("");
+  const usdLine = u.any
+    ? `<p class="muted">${esc(t("fin.sum.usdAll"))}: <b>${esc(money(u.income - u.expense, "USD"))}</b> &nbsp; (▲ ${esc(money(u.income, "USD"))} / ▼ ${esc(money(u.expense, "USD"))})</p>`
+    : "";
+  const align = rtl ? "right" : "left", numAlign = rtl ? "left" : "right";
+  const html = `<!DOCTYPE html><html lang="${rtl ? "ar" : "en"}" dir="${rtl ? "rtl" : "ltr"}"><head><meta charset="utf-8">
+    <title>${esc(t("fin.report.title"))}</title>
+    <style>
+      body{font-family:system-ui,-apple-system,Arial,sans-serif;color:#111;padding:24px;line-height:1.5}
+      h1{font-size:20px;margin:0 0 2px} h2{font-size:14px;margin:20px 0 8px}
+      .muted{color:#555;font-size:12px;margin:2px 0}
+      table{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0 14px}
+      th,td{border:1px solid #ccc;padding:6px 8px;text-align:${align};vertical-align:top}
+      th{background:#1a5cff;color:#fff;white-space:nowrap}
+      .num{text-align:${numAlign};font-variant-numeric:tabular-nums;white-space:nowrap}
+      @media print{@page{margin:14mm}}
+    </style></head><body>
+    <h1>${esc(t("fin.report.title"))}</h1>
+    <p class="muted">${esc(t("fin.report.generated"))}: ${esc(new Date().toLocaleString(loc))} · ${all.length} ${esc(t("fin.report.entries"))}</p>
+    <h2>${esc(t("fin.report.summary"))}</h2>
+    <table><thead><tr><th>${esc(t("fin.f.currency"))}</th><th>${esc(t("fin.sum.income"))}</th><th>${esc(t("fin.sum.expense"))}</th><th>${esc(t("fin.sum.net"))}</th></tr></thead>
+      <tbody>${ccyRows || `<tr><td colspan="4" class="muted">—</td></tr>`}</tbody></table>
+    ${usdLine}
+    <h2>${esc(t("fin.report.all"))}</h2>
+    <table><thead><tr>
+      <th>${esc(t("fin.th.date"))}</th><th>${esc(t("fin.report.type"))}</th><th>${esc(t("fin.th.name"))}</th>
+      <th>${esc(t("fin.th.category"))}</th><th>${esc(t("fin.th.paidTo"))}</th><th>${esc(t("fin.th.amount"))}</th>
+      <th>${esc(t("fin.f.usd"))}</th><th>${esc(t("fin.th.desc"))}</th>
+    </tr></thead><tbody>${rows || `<tr><td colspan="8" class="muted">—</td></tr>`}</tbody></table>
+  </body></html>`;
+  const w = window.open("", "_blank");
+  if (!w) { OS().toast(t("fin.report.popup")); return; }
+  w.document.open(); w.document.write(html); w.document.close(); w.focus();
+  setTimeout(() => { try { w.print(); } catch (_) {} }, 350);
+}
+
 function table() {
   let list = records().filter(r => (r.kind || "expense") === finTab);
   if (finCatFilter) list = list.filter(r => (r.category || "") === finCatFilter);
@@ -437,7 +502,8 @@ function view() {
          ${cats.map(c => `<option value="${esc(c)}" ${finCatFilter === c ? "selected" : ""}>${esc(c)}</option>`).join("")}
        </select>`
     : "";
-  const toolbar = `<div class="toolbar"><div class="toolbar__left">${tabs}</div><div class="toolbar__right" style="gap:8px">${catFilter}${addBtn}</div></div>`;
+  const printBtn = records().length ? `<button class="btn btn--ghost" id="finPrint">🖨 ${esc(t("fin.print"))}</button>` : "";
+  const toolbar = `<div class="toolbar"><div class="toolbar__left">${tabs}</div><div class="toolbar__right" style="gap:8px">${catFilter}${printBtn}${addBtn}</div></div>`;
   return `<div>${chartCard()}${summaryCards()}${toolbar}${table()}${settingsCard()}</div>`;
 }
 
@@ -590,6 +656,7 @@ function mount(ctx) {
   const cs = $("#finCcy"); if (cs) cs.onchange = (e) => { finCcy = e.target.value; reRender(); };
   const ms = $("#finMonth"); if (ms) ms.onchange = (e) => { finMonth = e.target.value; reRender(); };
   const cf = $("#finCatFilter"); if (cf) cf.onchange = (e) => { finCatFilter = e.target.value; reRender(); };
+  const pb = $("#finPrint"); if (pb) pb.onclick = printReport;
   const ccl = $("#finClearCat"); if (ccl) ccl.onclick = () => { finCatFilter = ""; reRender(); };
 
   // settings: manage the editable dropdowns
