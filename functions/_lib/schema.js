@@ -53,6 +53,31 @@ export const SCHEMA_STATEMENTS = [
   "CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)",
 ];
 
+/* Column migrations for tables created BEFORE a column was added. CREATE TABLE
+   IF NOT EXISTS never alters an existing table, so an older `tasks`/`owners`
+   table can be missing newer columns (e.g. time_log, timer_start) — which made
+   timer data silently fail to persist. SQLite has no "ADD COLUMN IF NOT EXISTS",
+   so these throw when the column already exists; ensureSchema ignores per-
+   statement errors, making them effectively idempotent. */
+export const SCHEMA_ALTERS = [
+  // tasks — fields added after the original table
+  "ALTER TABLE tasks ADD COLUMN created_by TEXT",
+  "ALTER TABLE tasks ADD COLUMN owner_id TEXT",
+  "ALTER TABLE tasks ADD COLUMN owner_name TEXT",
+  "ALTER TABLE tasks ADD COLUMN contact_method TEXT",
+  "ALTER TABLE tasks ADD COLUMN time_log TEXT",
+  "ALTER TABLE tasks ADD COLUMN timer_start TEXT",
+  "ALTER TABLE tasks ADD COLUMN repeat TEXT",
+  "ALTER TABLE tasks ADD COLUMN series_id TEXT",
+  // owners — fields added after the original table
+  "ALTER TABLE owners ADD COLUMN social TEXT",
+  "ALTER TABLE owners ADD COLUMN community INTEGER DEFAULT 0",
+  "ALTER TABLE owners ADD COLUMN contact_log TEXT",
+  // finance — paid_to / rate added later
+  "ALTER TABLE finance ADD COLUMN paid_to TEXT",
+  "ALTER TABLE finance ADD COLUMN rate TEXT",
+];
+
 /* Run the schema once per isolate. Cached as a promise so concurrent
    first-requests don't double-run. Uses env.DB directly (NOT the db.js
    helpers) to avoid recursion. Per-statement errors are ignored so one
@@ -64,6 +89,10 @@ export function ensureSchema(env) {
   _ensured = (async () => {
     for (const sql of SCHEMA_STATEMENTS) {
       try { await env.DB.prepare(sql).run(); } catch (_) { /* ignore individual */ }
+    }
+    // add any columns missing from pre-existing tables (errors = already there)
+    for (const sql of SCHEMA_ALTERS) {
+      try { await env.DB.prepare(sql).run(); } catch (_) { /* column exists → ignore */ }
     }
     return true;
   })();
