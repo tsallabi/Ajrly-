@@ -291,10 +291,11 @@ function notebookView() {
       padding:16px 22px 24px 60px;line-height:28px;color:#222;font-size:15px;outline:none;overflow-wrap:anywhere;
       background-image:repeating-linear-gradient(#fdfcdf 0,#fdfcdf 27px,#cfe2f3 28px)}
     .nb-paper::before{content:"";position:absolute;top:0;bottom:0;left:46px;width:2px;background:#e9a8a8}
-    .nb-paper:empty:before{content:attr(data-ph);color:#9a9a7a}
+    .nb-paper:empty::after{content:attr(data-ph);position:absolute;top:16px;left:60px;right:22px;color:#9a9a7a;pointer-events:none}
     .nb-paper img{max-width:100%;height:auto;border-radius:6px;margin:4px 0;display:block}
     [dir="rtl"] .nb-paper{padding:16px 60px 24px 22px}
     [dir="rtl"] .nb-paper::before{left:auto;right:46px}
+    [dir="rtl"] .nb-paper:empty::after{left:22px;right:60px}
   </style>`;
   if (!pages.length) {
     return `${nbStyle}<div class="nb-wrap"><div class="card"><div class="empty"><div class="empty__icon">📓</div>
