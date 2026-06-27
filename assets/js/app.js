@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=60";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=61";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=60";
-import "./modules/ownerContent.js?v=60";
-import "./modules/assets.js?v=60";
-import "./modules/account.js?v=60";
-import "./modules/team.js?v=60";
-import "./modules/performance.js?v=60";
+import "./modules/finance.js?v=61";
+import "./modules/ownerContent.js?v=61";
+import "./modules/assets.js?v=61";
+import "./modules/account.js?v=61";
+import "./modules/team.js?v=61";
+import "./modules/performance.js?v=61";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=60";
-import AjrlyPresence from "./presence.js?v=60"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=61";
+import AjrlyPresence from "./presence.js?v=61"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -280,20 +280,38 @@ function taskSessions(x) {
   return [];
 }
 const taskAccumSeconds = (x) => taskSessions(x).reduce((s, e) => s + (Number(e.seconds) || 0), 0);
+const taskLocked = (x) => x.status === "complete" || x.status === "closed";
 function taskLiveSeconds(x) {
-  if (!x.timerStart) return 0;
+  // a locked (complete/closed) task never accrues more time — even if a stale
+  // timerStart lingers, so it can't run forever after being finished.
+  if (!x.timerStart || taskLocked(x)) return 0;
   const st = new Date(x.timerStart).getTime();
   if (isNaN(st)) return 0;
   return Math.max(0, Math.floor((Date.now() - st) / 1000));
 }
 const taskTotalSeconds = (x) => taskAccumSeconds(x) + taskLiveSeconds(x);
-const taskRunning = (x) => !!x.timerStart;
-const taskLocked = (x) => x.status === "complete" || x.status === "closed";
+const taskRunning = (x) => !!x.timerStart && !taskLocked(x);
 function fmtDur(sec) {
   sec = Math.max(0, Math.floor(sec));
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
   const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
   return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+/* parse a manual tracked-time entry into seconds:
+   "h:mm:ss" / "m:ss" / a plain number (= minutes). */
+function parseDur(str) {
+  str = String(str || "").trim();
+  if (!str) return 0;
+  if (/^\d+$/.test(str)) return parseInt(str, 10) * 60; // plain number = minutes
+  const p = str.split(":").map((n) => parseInt(n, 10) || 0);
+  if (p.length === 3) return p[0] * 3600 + p[1] * 60 + p[2];
+  if (p.length === 2) return p[0] * 60 + p[1];
+  return 0;
+}
+/* one-time cleanup: a completed/closed task should never carry a live timer.
+   Clear any stale timerStart on locked tasks so they stop counting. */
+function healStuckTimers() {
+  (db.tasks || []).forEach((x) => { if (taskLocked(x) && x.timerStart) db.updateTask(x.id, { timerStart: "" }); });
 }
 /* close a running session into the log (no-op if not running) */
 function finalizeTimer(x) {
@@ -481,7 +499,11 @@ function taskModal(task, prefill) {
         <div class="field"><label>${t("field.duration")}</label><input id="f_dur" placeholder="00:30" value="${esc(x.duration || "")}" /></div>
       </div>
       <div class="field"><label>🔁 ${t("field.repeat")}</label><select id="f_repeat">${["none","daily","weekly","monthly"].map(r => opt(r, (x.repeat || "none"), t("repeat." + r))).join("")}</select></div>
-      ${editing ? `<div class="field"><label>⏱️ ${t("timer.tracked")}</label><input value="${fmtDur(taskTotalSeconds(x))}${taskRunning(x) ? " · " + t("timer.running") : ""}" disabled /></div>` : ""}
+      ${editing ? `<div class="field"><label>⏱️ ${t("timer.tracked")}</label>${
+        taskRunning(x)
+          ? `<input value="${esc(fmtDur(taskTotalSeconds(x)))} · ${esc(t("timer.running"))}" disabled />`
+          : `<input id="f_tracked" value="${esc(fmtDur(taskTotalSeconds(x)))}" placeholder="h:mm:ss" />`
+      }</div>` : ""}
       <div class="field-row">
         <div class="field"><label>${t("task.owner")}</label><select id="f_owner" ${lockOwner ? "disabled" : ""}>
           <option value="">—</option>
@@ -518,6 +540,16 @@ function taskModal(task, prefill) {
     }
     // finalize a running timer when the task is being completed/closed
     if (editing && (data.status === "complete" || data.status === "closed")) Object.assign(data, finalizeTimer(task));
+    // manual tracked-time correction (overrides everything) — lets you fix a
+    // wrong/lost duration directly, e.g. a forgotten-to-stop runaway timer.
+    const trk = $("#f_tracked");
+    if (editing && trk) {
+      const entered = parseDur(trk.value);
+      if (entered !== taskTotalSeconds(task)) {
+        data.timeLog = [{ seconds: entered, manual: true, end: new Date().toISOString(), by: (activeUser() && activeUser().name) || "" }];
+        data.timerStart = "";
+      }
+    }
     if (editing) db.updateTask(task.id, data); else db.addTask(data);
     closeModal(); render(); toast(t("toast.saved"));
   };
@@ -1256,6 +1288,7 @@ async function boot() {
     }
   } catch (_) { cloudReady = false; }
   bootDone = true;   // enable recurring-task rolling now that data is loaded
+  try { healStuckTimers(); } catch (_) {}   // stop any finished task still ticking
   try { markActive(); } catch (_) {}
   render();
 }
