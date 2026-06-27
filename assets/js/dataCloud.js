@@ -31,6 +31,7 @@ function persistSnapshot(db) {
       tasks: db.tasks, content: db.content, owners: db.owners, finance: db.finance,
       assetFolders: db.assetFolders, assets: db.assets, activity: db.activity,
       contentPosts: db.contentPosts, contentOpts: db.contentOpts, notebook: db.notebook,
+      collabs: db.collabs,
     }));
   } catch (_) { /* ignore quota/availability */ }
 }
@@ -78,6 +79,7 @@ export async function hydrateFromCloud(db) {
   if (Array.isArray(data.contentPosts)) replaceInPlace(db.contentPosts, mergeById(db.contentPosts, data.contentPosts));
   if (Array.isArray(data.contentOpts)) replaceInPlace(db.contentOpts, mergeById(db.contentOpts, data.contentOpts));
   if (Array.isArray(data.notebook)) replaceInPlace(db.notebook, mergeById(db.notebook, data.notebook));
+  if (Array.isArray(data.collabs)) replaceInPlace(db.collabs, mergeById(db.collabs, data.collabs));
   persistSnapshot(db);
   return data;
 }
@@ -206,6 +208,15 @@ export function wireWriteThrough(db, onError) {
     cloud.updateNotebookPage(id, patch).then((row) => mergeServerRow(db.notebook, id, row)).catch(report);
   });
   wrap("removeNotebookPage", (id) => { cloud.removeNotebookPage(id).catch(report); });
+
+  wrap("addCollab", (c) => {
+    const local = newest(db.collabs);
+    cloud.createCollab(c).then((row) => mergeServerRow(db.collabs, local && local.id, row)).catch(report);
+  });
+  wrap("updateCollab", (id, patch) => {
+    cloud.updateCollab(id, patch).then((row) => mergeServerRow(db.collabs, id, row)).catch(report);
+  });
+  wrap("removeCollab", (id) => { cloud.removeCollab(id).catch(report); });
 
   try { Object.defineProperty(db, "__cloudWired", { value: true, enumerable: false }); } catch (_) {}
   return true;

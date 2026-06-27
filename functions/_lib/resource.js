@@ -209,6 +209,30 @@ export const NOTEBOOK = {
   ],
 };
 
+export const COLLABS = {
+  table: "collaborations",
+  prefix: "cl",
+  order: "created_at DESC",
+  fields: [
+    { col: "company_name", key: "companyName" },
+    { col: "company_location", key: "companyLocation" },
+    { col: "owner_name", key: "ownerName" },
+    { col: "company_email", key: "companyEmail" },
+    { col: "company_phone", key: "companyPhone" },
+    { col: "owner_phone", key: "ownerPhone" },
+    { col: "details", key: "details" },
+    { col: "replied", key: "replied" },
+    { col: "stage", key: "stage" },                 // contacted|pending|agreed|rejected
+    { col: "offer_type", key: "offerType" },
+    { col: "offer_amount", key: "offerAmount" },
+    { col: "offer_unit", key: "offerUnit" },        // % or a currency code
+    { col: "offer_valid_type", key: "offerValidType" }, // unending|until
+    { col: "offer_valid_until", key: "offerValidUntil" },
+    { col: "agreed_at", key: "agreedAt" },
+    { col: "rejected_at", key: "rejectedAt" },
+  ],
+};
+
 export const ACTIVITY = {
   table: "activity_days",
   prefix: "ac",
