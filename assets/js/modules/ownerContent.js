@@ -33,6 +33,18 @@ registerStrings({
     "oc.nb.placeholder": "اكتب هنا… يمكنك لصق نص وصور",
     "oc.nb.title": "عنوان الصفحة", "oc.nb.date": "تاريخ النشر",
     "oc.nb.delete": "حذف الصفحة", "oc.nb.confirmDel": "حذف هذه الصفحة؟", "oc.nb.saved": "تم الحفظ",
+    "oc.tab.collab": "التعاونات",
+    "oc.cl.contacted": "تم التواصل", "oc.cl.pending": "قيد الانتظار", "oc.cl.agreed": "تم الاتفاق", "oc.cl.rejected": "مرفوض",
+    "oc.cl.add": "إضافة تعاون", "oc.cl.edit": "تعديل التعاون",
+    "oc.cl.company": "اسم الشركة", "oc.cl.location": "موقع الشركة", "oc.cl.owner": "اسم المالك",
+    "oc.cl.cemail": "بريد الشركة", "oc.cl.cphone": "هاتف الشركة", "oc.cl.ophone": "هاتف المالك",
+    "oc.cl.details": "تفاصيل طلب التعاون", "oc.cl.replied": "تم الرد",
+    "oc.cl.accept": "قبول", "oc.cl.reject": "رفض", "oc.cl.empty": "لا يوجد شيء هنا بعد",
+    "oc.cl.offer": "تفاصيل العرض", "oc.cl.offerType": "نوع العرض", "oc.cl.offerAmount": "قيمة العرض",
+    "oc.cl.unit": "الوحدة", "oc.cl.valid": "صلاحية العرض", "oc.cl.unending": "غير محدد", "oc.cl.untilDate": "حتى تاريخ",
+    "oc.cl.settings": "إعدادات — أنواع العروض", "oc.cl.optph": "نوع عرض جديد…", "oc.cl.add2": "إضافة",
+    "oc.cl.confirmReject": "رفض هذا التعاون؟", "oc.cl.rejectedSince": "مرفوض منذ", "oc.cl.agreedOn": "تم الاتفاق في",
+    "oc.cl.days": "يوم", "oc.cl.today": "اليوم", "oc.cl.offerTypePh": "اختر أو اكتب نوع العرض…",
   },
   en: {
     "nav.oc": "Owner Content",
@@ -57,6 +69,18 @@ registerStrings({
     "oc.nb.placeholder": "Write here… you can paste text and images",
     "oc.nb.title": "Page title", "oc.nb.date": "Publish date",
     "oc.nb.delete": "Delete page", "oc.nb.confirmDel": "Delete this page?", "oc.nb.saved": "Saved",
+    "oc.tab.collab": "Collaborations",
+    "oc.cl.contacted": "Contacted", "oc.cl.pending": "Pending", "oc.cl.agreed": "Agreed", "oc.cl.rejected": "Rejected",
+    "oc.cl.add": "Add collab", "oc.cl.edit": "Edit collab",
+    "oc.cl.company": "Company name", "oc.cl.location": "Company location", "oc.cl.owner": "Owner name",
+    "oc.cl.cemail": "Company email", "oc.cl.cphone": "Company phone", "oc.cl.ophone": "Owner phone",
+    "oc.cl.details": "Collab request / details", "oc.cl.replied": "Replied",
+    "oc.cl.accept": "Accept", "oc.cl.reject": "Reject", "oc.cl.empty": "Nothing here yet",
+    "oc.cl.offer": "Offer details", "oc.cl.offerType": "Offer type", "oc.cl.offerAmount": "Offer amount",
+    "oc.cl.unit": "Unit", "oc.cl.valid": "Offer validity", "oc.cl.unending": "Unending", "oc.cl.untilDate": "Until date",
+    "oc.cl.settings": "Settings — offer types", "oc.cl.optph": "New offer type…", "oc.cl.add2": "Add",
+    "oc.cl.confirmReject": "Reject this collaboration?", "oc.cl.rejectedSince": "Rejected since", "oc.cl.agreedOn": "Agreed on",
+    "oc.cl.days": "days", "oc.cl.today": "today", "oc.cl.offerTypePh": "Pick or type an offer type…",
   },
 });
 
@@ -79,6 +103,7 @@ let calOff = 0;          // month offset for the calendar tab
 let weekOff = 0;         // week offset for the grid (0 = current week; never < 0)
 let nbPage = 0;          // current notebook page index
 let nbSaveTimer = null;  // debounce for notebook autosave
+let collabSub = "contacted"; // collaborations sub-tab
 
 /* ---- week-grid date helpers (rows are auto-dated Mon→Sun) ---- */
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -325,6 +350,158 @@ function notebookView() {
   </div>`;
 }
 
+/* ---------------- collaborations tab ---------------- */
+const collabsAll = () => db().collabs || [];
+const COL_OFFER = "collabOfferType";
+const offerTypes = () => storedFor(COL_OFFER).map(o => o.value).filter(Boolean);
+const CCYS = ["%", "LYD", "USD", "EUR", "EGP"];
+const stageOf = (c) => c.stage || "contacted";
+function sinceText(iso) {
+  if (!iso) return "";
+  const d = new Date(String(iso) + "T00:00:00"); if (isNaN(d)) return esc(iso);
+  const days = Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+  const when = d.toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-GB");
+  return days === 0 ? `${when} · ${t("oc.cl.today")}` : `${when} · ${days} ${t("oc.cl.days")}`;
+}
+function collabCard(c, bodyHTML) {
+  const lines = [
+    c.companyLocation ? `📍 ${esc(c.companyLocation)}` : "",
+    c.ownerName ? `👤 ${esc(c.ownerName)}` : "",
+    c.companyEmail ? `✉️ ${esc(c.companyEmail)}` : "",
+    c.companyPhone ? `📞 ${esc(c.companyPhone)}` : "",
+    c.ownerPhone ? `📱 ${esc(c.ownerPhone)}` : "",
+  ].filter(Boolean).join(" · ");
+  return `<div class="card" style="margin-bottom:10px">
+    <div class="flex between" style="align-items:flex-start;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:15px">${esc(c.companyName || "—")}</div>
+        <div class="muted" style="font-size:12.5px;margin-top:2px">${lines}</div>
+        ${c.details ? `<div style="margin-top:8px;white-space:pre-wrap">${esc(c.details)}</div>` : ""}
+        ${bodyHTML || ""}
+      </div>
+      <div class="flex" style="gap:6px">
+        ${W() ? `<button class="btn btn--ghost btn--sm cl-edit" data-cid="${esc(c.id)}">✎</button>` : ""}
+        ${can("del") ? `<button class="btn btn--ghost btn--sm btn--danger cl-del" data-cid="${esc(c.id)}">🗑</button>` : ""}
+      </div>
+    </div>
+  </div>`;
+}
+function collabSettings() {
+  if (!W()) return "";
+  const rows = storedFor(COL_OFFER);
+  const chips = rows.length
+    ? rows.map(o => `<span class="flex" style="gap:6px;align-items:center;background:var(--brand-soft);color:var(--brand);border-radius:999px;padding:4px 6px 4px 12px;font-size:12.5px">${esc(o.value)}<button class="icon-btn cl-rmopt" data-id="${esc(o.id)}" title="✕" style="width:20px;height:20px;line-height:1;padding:0;font-size:12px">✕</button></span>`).join("")
+    : `<span class="muted">—</span>`;
+  return `<div class="card" style="margin-top:16px">
+    <div class="card__head"><span class="card__title">⚙️ ${esc(t("oc.cl.settings"))}</span></div>
+    <div class="flex" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">${chips}</div>
+    <div class="flex" style="gap:8px"><input class="input" id="clNewOpt" placeholder="${esc(t("oc.cl.optph"))}" style="max-width:260px" />
+      <button class="btn btn--sm" id="clAddOpt">＋ ${esc(t("oc.cl.add2"))}</button></div>
+  </div>`;
+}
+function collaborationsView() {
+  const subs = ["contacted", "pending", "agreed", "rejected"];
+  const cnt = {}; subs.forEach(s => cnt[s] = collabsAll().filter(c => stageOf(c) === s).length);
+  const subTabs = `<div class="seg" style="margin-bottom:14px;flex-wrap:wrap">${subs.map(s =>
+    `<button data-collabsub="${s}" class="${collabSub === s ? "active" : ""}">${esc(t("oc.cl." + s))}${cnt[s] ? ` (${cnt[s]})` : ""}</button>`).join("")}</div>`;
+  const list = collabsAll().filter(c => stageOf(c) === collabSub);
+  let rows;
+  if (!list.length) {
+    rows = `<div class="card"><div class="empty"><div class="empty__icon">🤝</div><p class="muted">${esc(t("oc.cl.empty"))}</p></div></div>`;
+  } else if (collabSub === "contacted") {
+    rows = list.map(c => collabCard(c, `<label class="flex" style="gap:8px;align-items:center;margin-top:10px;font-size:13px;cursor:pointer">
+      <input type="checkbox" class="cl-replied" data-cid="${esc(c.id)}" ${c.replied ? "checked" : ""} ${W() ? "" : "disabled"} style="width:auto"> ${esc(t("oc.cl.replied"))}</label>`)).join("");
+  } else if (collabSub === "pending") {
+    rows = list.map(c => collabCard(c, W() ? `<div class="flex" style="gap:8px;margin-top:12px">
+      <button class="btn btn--sm cl-accept" data-cid="${esc(c.id)}" style="background:var(--st-complete);color:#fff;border-color:var(--st-complete)">✓ ${esc(t("oc.cl.accept"))}</button>
+      <button class="btn btn--sm cl-reject" data-cid="${esc(c.id)}" style="background:var(--st-overdue,#ef4444);color:#fff;border-color:var(--st-overdue,#ef4444)">✕ ${esc(t("oc.cl.reject"))}</button>
+    </div>` : "")).join("");
+  } else if (collabSub === "agreed") {
+    rows = list.map(c => {
+      const amt = c.offerAmount ? `${esc(c.offerAmount)} ${esc(c.offerUnit || "")}`.trim() : "";
+      const valid = c.offerValidType === "until" ? `${esc(t("oc.cl.untilDate"))}: ${esc(c.offerValidUntil || "")}` : esc(t("oc.cl.unending"));
+      return collabCard(c, `<div style="margin-top:10px;background:var(--brand-soft);border-radius:8px;padding:8px 10px;font-size:13px">
+        <b>${esc(t("oc.cl.offer"))}:</b> ${esc(c.offerType || "—")}${amt ? ` · ${amt}` : ""} · ${valid}
+        ${c.agreedAt ? `<div class="muted" style="font-size:11.5px;margin-top:4px">${esc(t("oc.cl.agreedOn"))}: ${esc(c.agreedAt)}</div>` : ""}</div>`);
+    }).join("");
+  } else {
+    rows = list.map(c => collabCard(c, `<div style="margin-top:8px;color:var(--st-overdue,#ef4444);font-size:12.5px">⛔ ${esc(t("oc.cl.rejectedSince"))}: ${sinceText(c.rejectedAt)}</div>`)).join("");
+  }
+  const addBtn = (W() && collabSub === "contacted")
+    ? `<div class="toolbar"><div class="toolbar__right"><button class="btn btn--primary" id="clAdd">＋ ${esc(t("oc.cl.add"))}</button></div></div>` : "";
+  return `<div>${subTabs}${addBtn}${rows}${collabSettings()}</div>`;
+}
+function collabModal(c) {
+  const x = c || {}; const editing = !!c;
+  OS().openModal(`
+    <div class="modal__head"><h3>🤝 ${esc(t(editing ? "oc.cl.edit" : "oc.cl.add"))}</h3><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal__body">
+      <div class="field"><label>${esc(t("oc.cl.company"))}</label><input id="cl_company" value="${esc(x.companyName || "")}" /></div>
+      <div class="field-row">
+        <div class="field"><label>${esc(t("oc.cl.location"))}</label><input id="cl_loc" value="${esc(x.companyLocation || "")}" /></div>
+        <div class="field"><label>${esc(t("oc.cl.owner"))}</label><input id="cl_owner" value="${esc(x.ownerName || "")}" /></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>${esc(t("oc.cl.cemail"))}</label><input id="cl_cemail" type="email" value="${esc(x.companyEmail || "")}" /></div>
+        <div class="field"><label>${esc(t("oc.cl.cphone"))}</label><input id="cl_cphone" value="${esc(x.companyPhone || "")}" /></div>
+      </div>
+      <div class="field"><label>${esc(t("oc.cl.ophone"))}</label><input id="cl_ophone" value="${esc(x.ownerPhone || "")}" /></div>
+      <div class="field"><label>${esc(t("oc.cl.details"))}</label><textarea id="cl_details">${esc(x.details || "")}</textarea></div>
+    </div>
+    <div class="modal__foot"><button class="btn" data-close>${esc(t("btn.cancel") || "Cancel")}</button>
+      <button class="btn btn--primary" data-save>${esc(t("btn.save") || "Save")}</button></div>`);
+  ($("[data-save]") || {}).onclick = () => {
+    const data = {
+      companyName: $("#cl_company").value.trim(), companyLocation: $("#cl_loc").value.trim(),
+      ownerName: $("#cl_owner").value.trim(), companyEmail: $("#cl_cemail").value.trim(),
+      companyPhone: $("#cl_cphone").value.trim(), ownerPhone: $("#cl_ophone").value.trim(),
+      details: $("#cl_details").value.trim(),
+    };
+    if (!data.companyName) { $("#cl_company").focus(); return; }
+    if (editing) db().updateCollab(c.id, data);
+    else db().addCollab({ ...data, replied: 0, stage: "contacted" });
+    OS().closeModal(); (OS().render || (() => {}))(); OS().toast(t("oc.saved"));
+  };
+  $$("[data-close]").forEach(b => b.onclick = OS().closeModal);
+}
+function collabOfferModal(id) {
+  const c = collabsAll().find(x => x.id === id) || {};
+  const types = offerTypes();
+  OS().openModal(`
+    <div class="modal__head"><h3>🎁 ${esc(t("oc.cl.offer"))}</h3><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal__body">
+      <div class="field"><label>${esc(t("oc.cl.offerType"))}</label>
+        <input id="cl_otype" list="cl_otype_list" autocomplete="off" value="${esc(c.offerType || "")}" placeholder="${esc(t("oc.cl.offerTypePh"))}" />
+        <datalist id="cl_otype_list">${types.map(tp => `<option value="${esc(tp)}"></option>`).join("")}</datalist>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>${esc(t("oc.cl.offerAmount"))}</label><input id="cl_oamt" type="number" step="any" value="${esc(c.offerAmount || "")}" /></div>
+        <div class="field"><label>${esc(t("oc.cl.unit"))}</label><select id="cl_ounit">${CCYS.map(u => `<option ${(c.offerUnit || "%") === u ? "selected" : ""}>${esc(u)}</option>`).join("")}</select></div>
+      </div>
+      <div class="field"><label>${esc(t("oc.cl.valid"))}</label>
+        <select id="cl_ovtype">
+          <option value="unending" ${(c.offerValidType || "unending") === "unending" ? "selected" : ""}>${esc(t("oc.cl.unending"))}</option>
+          <option value="until" ${c.offerValidType === "until" ? "selected" : ""}>${esc(t("oc.cl.untilDate"))}</option>
+        </select></div>
+      <div class="field" id="cl_ovuntil_wrap" style="${c.offerValidType === "until" ? "" : "display:none"}"><label>${esc(t("oc.cl.untilDate"))}</label><input type="date" id="cl_ovuntil" value="${esc(c.offerValidUntil || "")}" /></div>
+    </div>
+    <div class="modal__foot"><button class="btn" data-close>${esc(t("btn.cancel") || "Cancel")}</button>
+      <button class="btn btn--primary" data-save>${esc(t("btn.save") || "Save")}</button></div>`);
+  const vt = $("#cl_ovtype"); if (vt) vt.onchange = () => { const w = $("#cl_ovuntil_wrap"); if (w) w.style.display = vt.value === "until" ? "" : "none"; };
+  ($("[data-save]") || {}).onclick = () => {
+    const otype = $("#cl_otype").value.trim();
+    if (otype && !offerTypes().some(x => x.toLowerCase() === otype.toLowerCase())) db().addContentOpt({ field: COL_OFFER, value: otype, url: "" });
+    const vtype = $("#cl_ovtype").value;
+    db().updateCollab(id, {
+      stage: "agreed", agreedAt: todayISO(),
+      offerType: otype, offerAmount: $("#cl_oamt").value, offerUnit: $("#cl_ounit").value,
+      offerValidType: vtype, offerValidUntil: vtype === "until" ? $("#cl_ovuntil").value : "",
+    });
+    OS().closeModal(); (OS().render || (() => {}))(); OS().toast(t("oc.saved"));
+  };
+  $$("[data-close]").forEach(b => b.onclick = OS().closeModal);
+}
+
 function view() {
   const style = `<style>
     table.oc-grid td { padding:4px 6px; vertical-align:middle }
@@ -345,9 +522,11 @@ function view() {
     <button data-ocview="grid" class="${ocView === "grid" ? "active" : ""}">🗓️ ${esc(t("oc.tab.grid"))}</button>
     <button data-ocview="calendar" class="${ocView === "calendar" ? "active" : ""}">📆 ${esc(t("oc.tab.calendar"))}</button>
     <button data-ocview="notebook" class="${ocView === "notebook" ? "active" : ""}">📓 ${esc(t("oc.tab.notebook"))}</button>
+    <button data-ocview="collab" class="${ocView === "collab" ? "active" : ""}">🤝 ${esc(t("oc.tab.collab"))}</button>
   </div>`;
   if (ocView === "calendar") return `<div>${tabs}${linksBar()}${calendarView()}</div>`;
   if (ocView === "notebook") return `<div>${tabs}${notebookView()}</div>`;
+  if (ocView === "collab") return `<div>${tabs}${collaborationsView()}</div>`;
 
   const filterSel = `<div class="toolbar"><div class="toolbar__left">
     <span class="muted">${esc(t("oc.filterBy"))}</span>
@@ -526,6 +705,25 @@ function mount(ctx) {
       nbScheduleSave(); // plain text paste → save after the default insert
     });
   }
+
+  // ---- collaborations bindings ----
+  $$("[data-collabsub]").forEach(b => b.onclick = () => { collabSub = b.dataset.collabsub; reRender(); });
+  const clAdd = $("#clAdd"); if (clAdd) clAdd.onclick = () => collabModal(null);
+  $$(".cl-edit").forEach(b => b.onclick = () => collabModal(collabsAll().find(c => c.id === b.dataset.cid)));
+  $$(".cl-del").forEach(b => b.onclick = () => { if (!confirm(t("oc.confirmDel"))) return; db().removeCollab(b.dataset.cid); reRender(); OS().toast(t("oc.deleted")); });
+  $$(".cl-replied").forEach(b => b.onchange = () => {
+    db().updateCollab(b.dataset.cid, { replied: b.checked ? 1 : 0, stage: b.checked ? "pending" : "contacted" });
+    reRender(); OS().toast(t("oc.saved"));
+  });
+  $$(".cl-accept").forEach(b => b.onclick = () => collabOfferModal(b.dataset.cid));
+  $$(".cl-reject").forEach(b => b.onclick = () => {
+    if (!confirm(t("oc.cl.confirmReject"))) return;
+    db().updateCollab(b.dataset.cid, { stage: "rejected", rejectedAt: todayISO() });
+    reRender(); OS().toast(t("oc.saved"));
+  });
+  const clAddOpt = $("#clAddOpt");
+  if (clAddOpt) clAddOpt.onclick = () => { const inp = $("#clNewOpt"); const v = inp && inp.value.trim(); if (!v) { inp && inp.focus(); return; } if (!offerTypes().some(x => x.toLowerCase() === v.toLowerCase())) db().addContentOpt({ field: COL_OFFER, value: v, url: "" }); reRender(); };
+  $$(".cl-rmopt").forEach(b => b.onclick = () => { db().removeContentOpt(b.dataset.id); reRender(); });
 
   const body = $("#ocBody");
   if (!body) return;

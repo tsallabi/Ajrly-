@@ -32,6 +32,8 @@ export const SCHEMA_STATEMENTS = [
   "CREATE TABLE IF NOT EXISTS content_opts (id TEXT PRIMARY KEY, field TEXT, value TEXT, url TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
   // notebook pages (flippable pages with text + inline images)
   "CREATE TABLE IF NOT EXISTS notebook (id TEXT PRIMARY KEY, title TEXT, date TEXT, body TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  // collaborations (company outreach pipeline)
+  "CREATE TABLE IF NOT EXISTS collaborations (id TEXT PRIMARY KEY, company_name TEXT, company_location TEXT, owner_name TEXT, company_email TEXT, company_phone TEXT, owner_phone TEXT, details TEXT, replied INTEGER DEFAULT 0, stage TEXT DEFAULT 'contacted', offer_type TEXT, offer_amount TEXT, offer_unit TEXT, offer_valid_type TEXT, offer_valid_until TEXT, agreed_at TEXT, rejected_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
   // activity days (attendance)
   "CREATE TABLE IF NOT EXISTS activity_days (id TEXT PRIMARY KEY, user_id TEXT, user_name TEXT, day TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
   "CREATE INDEX IF NOT EXISTS idx_activity_user_day ON activity_days(user_id, day)",

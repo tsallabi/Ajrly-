@@ -141,6 +141,29 @@ CREATE TABLE IF NOT EXISTS notebook (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- ---- Collaborations (company outreach pipeline) ----
+CREATE TABLE IF NOT EXISTS collaborations (
+  id               TEXT PRIMARY KEY,
+  company_name     TEXT,
+  company_location TEXT,
+  owner_name       TEXT,
+  company_email    TEXT,
+  company_phone    TEXT,
+  owner_phone      TEXT,
+  details          TEXT,                             -- collab request / details
+  replied          INTEGER DEFAULT 0,
+  stage            TEXT DEFAULT 'contacted',         -- contacted|pending|agreed|rejected
+  offer_type       TEXT,
+  offer_amount     TEXT,
+  offer_unit       TEXT,                             -- % or a currency code
+  offer_valid_type TEXT,                             -- unending|until
+  offer_valid_until TEXT,
+  agreed_at        TEXT,
+  rejected_at      TEXT,
+  created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ---- Activity days (per-user attendance for the monthly calendar) ----
 CREATE TABLE IF NOT EXISTS activity_days (
   id         TEXT PRIMARY KEY,
