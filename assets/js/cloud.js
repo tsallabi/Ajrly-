@@ -127,6 +127,7 @@ export async function pull() {
     activity: data.activity,
     contentPosts: data.contentPosts,
     contentOpts: data.contentOpts,
+    notebook: data.notebook,
     users: data.users || [],
     ts: data.ts || Date.now(),
   };
@@ -155,6 +156,7 @@ const _assets = makeCrud("assets");
 const _activity = makeCrud("activity");
 const _contentPosts = makeCrud("content-posts");
 const _contentOpts = makeCrud("content-opts");
+const _notebook = makeCrud("notebook");
 
 /* Tasks */
 export const createTask = (p) => _tasks.create(p);
@@ -188,6 +190,10 @@ export const removeContentPost = (id) => _contentPosts.remove(id);
 export const createContentOpt = (p) => _contentOpts.create(p);
 export const updateContentOpt = (id, p) => _contentOpts.update(id, p);
 export const removeContentOpt = (id) => _contentOpts.remove(id);
+/* Notebook pages */
+export const createNotebookPage = (p) => _notebook.create(p);
+export const updateNotebookPage = (id, p) => _notebook.update(id, p);
+export const removeNotebookPage = (id) => _notebook.remove(id);
 
 /* Clean default export for ergonomic importing. */
 const cloud = {
@@ -205,5 +211,6 @@ const cloud = {
   createActivity,
   createContentPost, updateContentPost, removeContentPost,
   createContentOpt, updateContentOpt, removeContentOpt,
+  createNotebookPage, updateNotebookPage, removeNotebookPage,
 };
 export default cloud;

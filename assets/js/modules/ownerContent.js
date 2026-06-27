@@ -27,7 +27,12 @@ registerStrings({
     "oc.confirmDel": "حذف هذا الصف؟", "oc.saved": "تم الحفظ", "oc.deleted": "تم الحذف",
     "oc.noLinks": "لا روابط بعد — اضغط تعديل الروابط",
     "oc.filterBy": "تصفية حسب الفكرة:", "oc.allIdeas": "كل الأفكار",
-    "oc.tab.grid": "الجدول", "oc.tab.calendar": "التقويم",
+    "oc.tab.grid": "الجدول", "oc.tab.calendar": "التقويم", "oc.tab.notebook": "المفكرة",
+    "oc.nb.new": "صفحة جديدة", "oc.nb.page": "صفحة", "oc.nb.of": "من",
+    "oc.nb.empty": "لا توجد صفحات بعد — اضغط صفحة جديدة",
+    "oc.nb.placeholder": "اكتب هنا… يمكنك لصق نص وصور",
+    "oc.nb.title": "عنوان الصفحة", "oc.nb.date": "تاريخ النشر",
+    "oc.nb.delete": "حذف الصفحة", "oc.nb.confirmDel": "حذف هذه الصفحة؟", "oc.nb.saved": "تم الحفظ",
   },
   en: {
     "nav.oc": "Owner Content",
@@ -46,7 +51,12 @@ registerStrings({
     "oc.confirmDel": "Delete this row?", "oc.saved": "Saved", "oc.deleted": "Deleted",
     "oc.noLinks": "No links yet — click Edit links",
     "oc.filterBy": "Filter by idea:", "oc.allIdeas": "All ideas",
-    "oc.tab.grid": "Grid", "oc.tab.calendar": "Calendar",
+    "oc.tab.grid": "Grid", "oc.tab.calendar": "Calendar", "oc.tab.notebook": "Notebook",
+    "oc.nb.new": "New page", "oc.nb.page": "Page", "oc.nb.of": "of",
+    "oc.nb.empty": "No pages yet — click New page",
+    "oc.nb.placeholder": "Write here… you can paste text and images",
+    "oc.nb.title": "Page title", "oc.nb.date": "Publish date",
+    "oc.nb.delete": "Delete page", "oc.nb.confirmDel": "Delete this page?", "oc.nb.saved": "Saved",
   },
 });
 
@@ -64,9 +74,11 @@ const COLS = ["day", "date", "goal", "postTo", "idea", "type", "caption", "pubTi
 const EDIT_COLS = ["goal", "postTo", "idea", "type", "caption", "pubTime"]; // day+date are auto
 const DROPDOWNS = { goal: 1, postTo: 1, idea: 1, type: 1 };
 let ocFilterIdea = "";   // "" = all ideas
-let ocView = "grid";     // grid | calendar
+let ocView = "grid";     // grid | calendar | notebook
 let calOff = 0;          // month offset for the calendar tab
 let weekOff = 0;         // week offset for the grid (0 = current week; never < 0)
+let nbPage = 0;          // current notebook page index
+let nbSaveTimer = null;  // debounce for notebook autosave
 
 /* ---- week-grid date helpers (rows are auto-dated Mon→Sun) ---- */
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -245,6 +257,73 @@ function calendarView() {
   </div>`;
 }
 
+/* ---------------- notebook tab ---------------- */
+const nbPages = () => db().notebook || [];
+function nbClamp() { const n = nbPages().length; if (nbPage < 0) nbPage = 0; if (nbPage > n - 1) nbPage = Math.max(0, n - 1); }
+/* strip scripts/handlers from pasted/edited HTML before storing */
+function nbSanitize(html) {
+  const d = document.createElement("div");
+  d.innerHTML = String(html || "");
+  d.querySelectorAll("script,style,iframe,object,embed,link,meta").forEach(n => n.remove());
+  d.querySelectorAll("*").forEach(el => {
+    [...el.attributes].forEach(a => {
+      if (/^on/i.test(a.name) || ((a.name === "href" || a.name === "src") && /^\s*javascript:/i.test(a.value))) el.removeAttribute(a.name);
+    });
+  });
+  return d.innerHTML;
+}
+/* persist the current page's body + title (sanitized); debounced while typing */
+function nbSaveNow() {
+  clearTimeout(nbSaveTimer); nbSaveTimer = null;
+  const el = $("#nbBody"); if (!el) return;
+  const id = el.dataset.id; if (!id) return;
+  const patch = { body: nbSanitize(el.innerHTML) };
+  const titleEl = $("#nbTitle"); if (titleEl) patch.title = titleEl.value;
+  db().updateNotebookPage(id, patch);
+}
+function nbScheduleSave() { clearTimeout(nbSaveTimer); nbSaveTimer = setTimeout(nbSaveNow, 700); }
+function notebookView() {
+  const W = can("write");
+  const pages = nbPages();
+  const nbStyle = `<style>
+    .nb-wrap{max-width:840px;margin:0 auto}
+    .nb-paper{position:relative;min-height:560px;background:#fdfcdf;border:1px solid var(--border);border-radius:10px;
+      padding:16px 22px 24px 60px;line-height:28px;color:#222;font-size:15px;outline:none;overflow-wrap:anywhere;
+      background-image:repeating-linear-gradient(#fdfcdf 0,#fdfcdf 27px,#cfe2f3 28px)}
+    .nb-paper::before{content:"";position:absolute;top:0;bottom:0;left:46px;width:2px;background:#e9a8a8}
+    .nb-paper:empty:before{content:attr(data-ph);color:#9a9a7a}
+    .nb-paper img{max-width:100%;height:auto;border-radius:6px;margin:4px 0;display:block}
+    [dir="rtl"] .nb-paper{padding:16px 60px 24px 22px}
+    [dir="rtl"] .nb-paper::before{left:auto;right:46px}
+  </style>`;
+  if (!pages.length) {
+    return `${nbStyle}<div class="nb-wrap"><div class="card"><div class="empty"><div class="empty__icon">📓</div>
+      <p class="muted">${esc(t("oc.nb.empty"))}</p>
+      ${W ? `<button class="btn btn--primary" id="nbNew">＋ ${esc(t("oc.nb.new"))}</button>` : ""}</div></div></div>`;
+  }
+  nbClamp();
+  const p = pages[nbPage];
+  const nav = `<div class="flex between" style="align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap">
+    <span class="flex" style="gap:6px;align-items:center">
+      <button class="btn btn--ghost btn--sm" data-nbnav="prev" ${nbPage <= 0 ? "disabled" : ""}>‹</button>
+      <span class="muted" style="min-width:96px;text-align:center">${esc(t("oc.nb.page"))} ${nbPage + 1} ${esc(t("oc.nb.of"))} ${pages.length}</span>
+      <button class="btn btn--ghost btn--sm" data-nbnav="next" ${nbPage >= pages.length - 1 ? "disabled" : ""}>›</button>
+    </span>
+    <span class="flex" style="gap:6px;align-items:center">
+      ${W ? `<input type="date" class="input" id="nbDate" value="${esc(p.date || "")}" style="max-width:160px" title="${esc(t("oc.nb.date"))}" />`
+          : (p.date ? `<span class="muted">📅 ${esc(p.date)}</span>` : "")}
+      ${W ? `<button class="btn btn--ghost btn--sm" id="nbNew">＋ ${esc(t("oc.nb.new"))}</button>` : ""}
+      ${(W && can("del")) ? `<button class="btn btn--ghost btn--sm btn--danger" id="nbDel" title="${esc(t("oc.nb.delete"))}">🗑</button>` : ""}
+    </span>
+  </div>`;
+  const titleField = W
+    ? `<input class="input" id="nbTitle" value="${esc(p.title || "")}" placeholder="${esc(t("oc.nb.title"))}" style="margin-bottom:8px;font-weight:600" />`
+    : (p.title ? `<div style="font-weight:700;margin-bottom:8px">${esc(p.title)}</div>` : "");
+  return `${nbStyle}<div class="nb-wrap">${nav}${titleField}
+    <div class="nb-paper" id="nbBody" ${W ? 'contenteditable="true"' : ""} data-id="${esc(p.id)}" data-ph="${esc(t("oc.nb.placeholder"))}">${nbSanitize(p.body || "")}</div>
+  </div>`;
+}
+
 function view() {
   const style = `<style>
     table.oc-grid td { padding:4px 6px; vertical-align:middle }
@@ -264,8 +343,10 @@ function view() {
   const tabs = `<div class="seg" id="ocTabs" style="margin-bottom:14px">
     <button data-ocview="grid" class="${ocView === "grid" ? "active" : ""}">🗓️ ${esc(t("oc.tab.grid"))}</button>
     <button data-ocview="calendar" class="${ocView === "calendar" ? "active" : ""}">📆 ${esc(t("oc.tab.calendar"))}</button>
+    <button data-ocview="notebook" class="${ocView === "notebook" ? "active" : ""}">📓 ${esc(t("oc.tab.notebook"))}</button>
   </div>`;
   if (ocView === "calendar") return `<div>${tabs}${linksBar()}${calendarView()}</div>`;
+  if (ocView === "notebook") return `<div>${tabs}${notebookView()}</div>`;
 
   const filterSel = `<div class="toolbar"><div class="toolbar__left">
     <span class="muted">${esc(t("oc.filterBy"))}</span>
@@ -401,6 +482,49 @@ function mount(ctx) {
   const el = $("#ocEditLinks"); if (el) el.onclick = () => linksEditor();
   $$(".oc-opt").forEach(b => b.onclick = () => optionEditor(b.dataset.f, reRender));
   const flt = $("#ocFilter"); if (flt) flt.onchange = (e) => { ocFilterIdea = e.target.value; reRender(); };
+
+  // ---- notebook bindings (bound before the grid early-return below) ----
+  const nbNew = $("#nbNew");
+  if (nbNew) nbNew.onclick = () => {
+    db().addNotebookPage({ title: "", date: todayISO(), body: "" });
+    nbPage = (db().notebook || []).length - 1;   // jump to the new (last) page
+    reRender();
+  };
+  $$("[data-nbnav]").forEach(b => b.onclick = () => {
+    nbSaveNow();
+    nbPage += (b.dataset.nbnav === "next" ? 1 : -1);
+    reRender();
+  });
+  const nbDate = $("#nbDate"); if (nbDate) nbDate.onchange = () => { const el2 = $("#nbBody"); if (el2) db().updateNotebookPage(el2.dataset.id, { date: nbDate.value }); };
+  const nbTitle = $("#nbTitle"); if (nbTitle) nbTitle.oninput = () => nbScheduleSave();
+  const nbDel = $("#nbDel");
+  if (nbDel) nbDel.onclick = () => {
+    const el2 = $("#nbBody"); if (!el2) return;
+    if (!confirm(t("oc.nb.confirmDel"))) return;
+    db().removeNotebookPage(el2.dataset.id);
+    if (nbPage > 0) nbPage -= 1;
+    reRender(); OS().toast(t("oc.deleted"));
+  };
+  const nbBody = $("#nbBody");
+  if (nbBody && nbBody.getAttribute("contenteditable") === "true") {
+    nbBody.addEventListener("input", () => nbScheduleSave());
+    nbBody.addEventListener("blur", () => nbSaveNow());
+    nbBody.addEventListener("paste", (e) => {
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      for (const it of items) {
+        if (it.type && it.type.indexOf("image") === 0) {
+          e.preventDefault();
+          const f = it.getAsFile(); if (!f) continue;
+          if (f.size > 2 * 1024 * 1024) { OS().toast(t("oc.attach.tooBig")); return; }
+          const r = new FileReader();
+          r.onload = () => { try { document.execCommand("insertImage", false, String(r.result || "")); } catch (_) {} nbScheduleSave(); };
+          r.readAsDataURL(f);
+          return;
+        }
+      }
+      nbScheduleSave(); // plain text paste → save after the default insert
+    });
+  }
 
   const body = $("#ocBody");
   if (!body) return;

@@ -30,7 +30,7 @@ function persistSnapshot(db) {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       tasks: db.tasks, content: db.content, owners: db.owners, finance: db.finance,
       assetFolders: db.assetFolders, assets: db.assets, activity: db.activity,
-      contentPosts: db.contentPosts, contentOpts: db.contentOpts,
+      contentPosts: db.contentPosts, contentOpts: db.contentOpts, notebook: db.notebook,
     }));
   } catch (_) { /* ignore quota/availability */ }
 }
@@ -77,6 +77,7 @@ export async function hydrateFromCloud(db) {
   if (Array.isArray(data.activity)) replaceInPlace(db.activity, mergeById(db.activity, data.activity));
   if (Array.isArray(data.contentPosts)) replaceInPlace(db.contentPosts, mergeById(db.contentPosts, data.contentPosts));
   if (Array.isArray(data.contentOpts)) replaceInPlace(db.contentOpts, mergeById(db.contentOpts, data.contentOpts));
+  if (Array.isArray(data.notebook)) replaceInPlace(db.notebook, mergeById(db.notebook, data.notebook));
   persistSnapshot(db);
   return data;
 }
@@ -196,6 +197,15 @@ export function wireWriteThrough(db, onError) {
     cloud.updateContentOpt(id, patch).then((row) => mergeServerRow(db.contentOpts, id, row)).catch(report);
   });
   wrap("removeContentOpt", (id) => { cloud.removeContentOpt(id).catch(report); });
+
+  wrap("addNotebookPage", (p) => {
+    const local = db.notebook[db.notebook.length - 1]; // addNotebookPage appends
+    cloud.createNotebookPage(p).then((row) => mergeServerRow(db.notebook, local && local.id, row)).catch(report);
+  });
+  wrap("updateNotebookPage", (id, patch) => {
+    cloud.updateNotebookPage(id, patch).then((row) => mergeServerRow(db.notebook, id, row)).catch(report);
+  });
+  wrap("removeNotebookPage", (id) => { cloud.removeNotebookPage(id).catch(report); });
 
   try { Object.defineProperty(db, "__cloudWired", { value: true, enumerable: false }); } catch (_) {}
   return true;
