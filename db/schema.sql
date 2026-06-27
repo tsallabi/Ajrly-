@@ -131,6 +131,16 @@ CREATE TABLE IF NOT EXISTS content_opts (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- ---- Notebook (flippable pages: text + inline images) ----
+CREATE TABLE IF NOT EXISTS notebook (
+  id         TEXT PRIMARY KEY,
+  title      TEXT,
+  date       TEXT,                                   -- date of publishing
+  body       TEXT,                                   -- HTML content (text + inline images)
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ---- Activity days (per-user attendance for the monthly calendar) ----
 CREATE TABLE IF NOT EXISTS activity_days (
   id         TEXT PRIMARY KEY,

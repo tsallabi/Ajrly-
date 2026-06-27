@@ -198,6 +198,17 @@ export const CONTENT_OPTS = {
   ],
 };
 
+export const NOTEBOOK = {
+  table: "notebook",
+  prefix: "nb",
+  order: "created_at ASC",     // pages in the order they were added
+  fields: [
+    { col: "title", key: "title" },
+    { col: "date", key: "date" },
+    { col: "body", key: "body" },   // HTML content (text + inline images)
+  ],
+};
+
 export const ACTIVITY = {
   table: "activity_days",
   prefix: "ac",

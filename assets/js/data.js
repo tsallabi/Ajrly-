@@ -43,6 +43,9 @@ const seedActivity = [];
 const seedContentPosts = [];
 const seedContentOpts = [];
 
+/* ---- Seed: Notebook pages (flippable pages with text/images) ---- */
+const seedNotebook = [];
+
 /* ---- Static reference: Content pillars (from Pillar matrix) ---- */
 export const PILLARS = [
   { name: "Property Discovery", sub: "Core Product", icon: "🔍", purpose: "Help renters discover properties and inspire bookings." },
@@ -76,7 +79,7 @@ export const LINKS = [
 ];
 
 /* ---- Store ---- */
-const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets, activity: seedActivity, contentPosts: seedContentPosts, contentOpts: seedContentOpts });
+const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets, activity: seedActivity, contentPosts: seedContentPosts, contentOpts: seedContentOpts, notebook: seedNotebook });
 
 let state = load();
 
@@ -181,6 +184,11 @@ export const db = {
   addContentOpt(o) { state.contentOpts.unshift({ ...o, id: uid("co") }); persist(); },
   updateContentOpt(id, patch) { state.contentOpts = state.contentOpts.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
   removeContentOpt(id) { state.contentOpts = state.contentOpts.filter(x => x.id !== id); persist(); },
+
+  get notebook() { return state.notebook; },
+  addNotebookPage(p) { state.notebook.push({ ...p, id: uid("nb") }); persist(); },
+  updateNotebookPage(id, patch) { state.notebook = state.notebook.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
+  removeNotebookPage(id) { state.notebook = state.notebook.filter(x => x.id !== id); persist(); },
 
   reset() { state = defaultState(); persist(); },
   exportJSON() { return JSON.stringify(state, null, 2); },
