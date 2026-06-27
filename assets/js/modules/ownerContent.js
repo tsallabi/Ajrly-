@@ -104,6 +104,7 @@ let weekOff = 0;         // week offset for the grid (0 = current week; never < 
 let nbPage = 0;          // current notebook page index
 let nbSaveTimer = null;  // debounce for notebook autosave
 let collabSub = "contacted"; // collaborations sub-tab
+let collabSettingsOpen = false; // collaborations offer-types settings expanded?
 
 /* ---- week-grid date helpers (rows are auto-dated Mon→Sun) ---- */
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -388,12 +389,13 @@ function collabCard(c, bodyHTML) {
 }
 function collabSettings() {
   if (!W()) return "";
+  const head = `<div style="margin-top:18px"><button class="btn btn--ghost btn--sm" id="clSettingsBtn">⚙️ ${esc(t("oc.cl.settings"))} ${collabSettingsOpen ? "▲" : "▼"}</button></div>`;
+  if (!collabSettingsOpen) return head;
   const rows = storedFor(COL_OFFER);
   const chips = rows.length
     ? rows.map(o => `<span class="flex" style="gap:6px;align-items:center;background:var(--brand-soft);color:var(--brand);border-radius:999px;padding:4px 6px 4px 12px;font-size:12.5px">${esc(o.value)}<button class="icon-btn cl-rmopt" data-id="${esc(o.id)}" title="✕" style="width:20px;height:20px;line-height:1;padding:0;font-size:12px">✕</button></span>`).join("")
     : `<span class="muted">—</span>`;
-  return `<div class="card" style="margin-top:16px">
-    <div class="card__head"><span class="card__title">⚙️ ${esc(t("oc.cl.settings"))}</span></div>
+  return head + `<div class="card" style="margin-top:10px">
     <div class="flex" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">${chips}</div>
     <div class="flex" style="gap:8px"><input class="input" id="clNewOpt" placeholder="${esc(t("oc.cl.optph"))}" style="max-width:260px" />
       <button class="btn btn--sm" id="clAddOpt">＋ ${esc(t("oc.cl.add2"))}</button></div>
@@ -721,6 +723,7 @@ function mount(ctx) {
     db().updateCollab(b.dataset.cid, { stage: "rejected", rejectedAt: todayISO() });
     reRender(); OS().toast(t("oc.saved"));
   });
+  const clSettingsBtn = $("#clSettingsBtn"); if (clSettingsBtn) clSettingsBtn.onclick = () => { collabSettingsOpen = !collabSettingsOpen; reRender(); };
   const clAddOpt = $("#clAddOpt");
   if (clAddOpt) clAddOpt.onclick = () => { const inp = $("#clNewOpt"); const v = inp && inp.value.trim(); if (!v) { inp && inp.focus(); return; } if (!offerTypes().some(x => x.toLowerCase() === v.toLowerCase())) db().addContentOpt({ field: COL_OFFER, value: v, url: "" }); reRender(); };
   $$(".cl-rmopt").forEach(b => b.onclick = () => { db().removeContentOpt(b.dataset.id); reRender(); });
