@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=70";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=71";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=70";
-import "./modules/ownerContent.js?v=70";
-import "./modules/assets.js?v=70";
-import "./modules/account.js?v=70";
-import "./modules/team.js?v=70";
-import "./modules/performance.js?v=70";
+import "./modules/finance.js?v=71";
+import "./modules/ownerContent.js?v=71";
+import "./modules/assets.js?v=71";
+import "./modules/account.js?v=71";
+import "./modules/team.js?v=71";
+import "./modules/performance.js?v=71";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=70";
-import AjrlyPresence from "./presence.js?v=70"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=71";
+import AjrlyPresence from "./presence.js?v=71"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -372,6 +372,23 @@ function rollRecurringTasks() {
       dueDate: today, date: today, status: "pending",
     });
     changed = true;
+  });
+  return changed;
+}
+
+/* Flip past-due tasks that aren't finished to "overdue". A task is overdue
+   when its due date is before today and it's still pending or in-progress.
+   (complete/closed are left alone.) Returns true if anything changed. */
+function rollOverdueTasks() {
+  const today = todayISO();
+  let changed = false;
+  db.tasks.forEach((t) => {
+    const due = t.dueDate || "";
+    const st = t.status || "pending";
+    if (due && due < today && (st === "pending" || st === "progress")) {
+      db.updateTask(t.id, { status: "overdue" });
+      changed = true;
+    }
   });
   return changed;
 }
@@ -1046,8 +1063,8 @@ function render() {
   if (!activeUser()) { renderAuthScreen(); return; }
   document.body.classList.remove("authing");
   renderUserChip();
-  // roll daily recurring tasks forward (after boot so data is loaded)
-  if (bootDone) { try { rollRecurringTasks(); } catch (_) {} }
+  // roll daily recurring tasks forward + flag past-due tasks overdue (after boot)
+  if (bootDone) { try { rollRecurringTasks(); } catch (_) {} try { rollOverdueTasks(); } catch (_) {} }
   try {
     stopTimerTicker();
     const r = currentRoute();
