@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   contact_method TEXT,                               -- whatsapp|phone|email
   time_log    TEXT,                                  -- JSON array of {start,end,seconds,by} work sessions
   timer_start TEXT,                                  -- ISO timestamp while a timer is running (else empty)
+  timer_by    TEXT,                                  -- who started the running timer (credited on stop)
   repeat      TEXT,                                  -- none|daily (recurring)
   series_id   TEXT,                                  -- links recurring daily instances
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),

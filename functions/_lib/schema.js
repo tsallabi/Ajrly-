@@ -16,7 +16,7 @@ export const SCHEMA_STATEMENTS = [
   "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, pass_hash TEXT NOT NULL, salt TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', active INTEGER NOT NULL DEFAULT 1, monitor_level TEXT NOT NULL DEFAULT 'standard', tz TEXT DEFAULT 'Africa/Tripoli', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
   "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
   // tasks
-  "CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT, priority TEXT DEFAULT 'Medium', status TEXT DEFAULT 'pending', assigned_by TEXT, delegate_to TEXT, due_date TEXT, date TEXT, duration TEXT, notes TEXT, created_by TEXT, owner_id TEXT, owner_name TEXT, contact_method TEXT, time_log TEXT, timer_start TEXT, repeat TEXT, series_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT, priority TEXT DEFAULT 'Medium', status TEXT DEFAULT 'pending', assigned_by TEXT, delegate_to TEXT, due_date TEXT, date TEXT, duration TEXT, notes TEXT, created_by TEXT, owner_id TEXT, owner_name TEXT, contact_method TEXT, time_log TEXT, timer_start TEXT, timer_by TEXT, repeat TEXT, series_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
   "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)",
   "CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_id)",
   "CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(delegate_to, assigned_by)",
@@ -73,6 +73,7 @@ export const SCHEMA_ALTERS = [
   "ALTER TABLE tasks ADD COLUMN contact_method TEXT",
   "ALTER TABLE tasks ADD COLUMN time_log TEXT",
   "ALTER TABLE tasks ADD COLUMN timer_start TEXT",
+  "ALTER TABLE tasks ADD COLUMN timer_by TEXT",
   "ALTER TABLE tasks ADD COLUMN repeat TEXT",
   "ALTER TABLE tasks ADD COLUMN series_id TEXT",
   // owners — fields added after the original table

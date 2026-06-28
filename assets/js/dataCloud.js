@@ -61,12 +61,13 @@ export async function hydrateFromCloud(db) {
   // (key absent → undefined); restoring the local value keeps a running task
   // timer alive across a refresh instead of stopping it and zeroing the total.
   const timerSnap = {};
-  (db.tasks || []).forEach((tk) => { if (tk && tk.id) timerSnap[tk.id] = { timerStart: tk.timerStart, timeLog: tk.timeLog }; });
+  (db.tasks || []).forEach((tk) => { if (tk && tk.id) timerSnap[tk.id] = { timerStart: tk.timerStart, timeLog: tk.timeLog, timerBy: tk.timerBy }; });
   replaceInPlace(db.tasks, mergeById(db.tasks, data.tasks));
   db.tasks.forEach((tk) => {
     const s = timerSnap[tk.id]; if (!s) return;
     if (tk.timerStart === undefined && s.timerStart !== undefined) tk.timerStart = s.timerStart;
     if (tk.timeLog === undefined && s.timeLog !== undefined) tk.timeLog = s.timeLog;
+    if (tk.timerBy === undefined && s.timerBy !== undefined) tk.timerBy = s.timerBy;
   });
   replaceInPlace(db.content, mergeById(db.content, data.content));
   replaceInPlace(db.owners, mergeById(db.owners, data.owners));
