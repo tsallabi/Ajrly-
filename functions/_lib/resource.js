@@ -215,6 +215,7 @@ export const BUDGETS = {
   order: "created_at DESC",
   fields: [
     { col: "name", key: "name" },
+    { col: "description", key: "description" },
     { col: "planner", key: "planner" },
     { col: "status", key: "status" },              // pending|approved|denied
     { col: "denial_note", key: "denialNote" },

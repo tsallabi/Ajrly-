@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS notebook (
 CREATE TABLE IF NOT EXISTS budgets (
   id          TEXT PRIMARY KEY,
   name        TEXT,
+  description TEXT,
   planner     TEXT,                                 -- employee planning it
   status      TEXT DEFAULT 'pending',               -- pending|approved|denied
   denial_note TEXT,                                 -- changes needed on denial
