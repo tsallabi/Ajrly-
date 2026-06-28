@@ -209,6 +209,22 @@ export const NOTEBOOK = {
   ],
 };
 
+export const BUDGETS = {
+  table: "budgets",
+  prefix: "bg",
+  order: "created_at DESC",
+  fields: [
+    { col: "name", key: "name" },
+    { col: "planner", key: "planner" },
+    { col: "status", key: "status" },              // pending|approved|denied
+    { col: "denial_note", key: "denialNote" },
+    { col: "currency", key: "currency" },
+    { col: "assigned", key: "assigned" },          // assigned/planned budget
+    { col: "actual", key: "actual" },              // actual spending
+    { col: "costs", key: "costs", json: true },    // [{name,description,estimatedCost,currency,rate,duration,provider,importance,attachment,attachmentName}]
+  ],
+};
+
 export const COLLABS = {
   table: "collaborations",
   prefix: "cl",

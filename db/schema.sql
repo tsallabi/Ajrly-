@@ -141,6 +141,21 @@ CREATE TABLE IF NOT EXISTS notebook (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- ---- Budgets (campaign/dev budgets + cost line-items as JSON) ----
+CREATE TABLE IF NOT EXISTS budgets (
+  id          TEXT PRIMARY KEY,
+  name        TEXT,
+  planner     TEXT,                                 -- employee planning it
+  status      TEXT DEFAULT 'pending',               -- pending|approved|denied
+  denial_note TEXT,                                 -- changes needed on denial
+  currency    TEXT DEFAULT 'LYD',
+  assigned    TEXT,                                 -- assigned/planned amount
+  actual      TEXT,                                 -- actual spending
+  costs       TEXT,                                 -- JSON array of cost line-items
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ---- Collaborations (company outreach pipeline) ----
 CREATE TABLE IF NOT EXISTS collaborations (
   id               TEXT PRIMARY KEY,
