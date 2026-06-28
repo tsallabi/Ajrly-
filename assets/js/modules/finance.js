@@ -65,7 +65,7 @@ registerStrings({
     "fin.report.popup": "اسمح بالنوافذ المنبثقة لإنشاء التقرير",
     "fin.tab.budgets": "الميزانيات",
     "fin.bud.create": "إنشاء ميزانية", "fin.bud.edit": "تعديل الميزانية",
-    "fin.bud.name": "اسم الميزانية", "fin.bud.planner": "المخطِّط (الموظف)",
+    "fin.bud.name": "اسم الميزانية", "fin.bud.desc": "الوصف", "fin.bud.planner": "المخطِّط (الموظف)",
     "fin.bud.status.pending": "قيد المراجعة", "fin.bud.status.approved": "معتمدة", "fin.bud.status.denied": "مرفوضة",
     "fin.bud.approve": "اعتماد", "fin.bud.deny": "رفض", "fin.bud.open": "فتح", "fin.bud.back": "رجوع",
     "fin.bud.empty": "لا توجد ميزانيات بعد",
@@ -143,7 +143,7 @@ registerStrings({
     "fin.report.popup": "Allow pop-ups to generate the report",
     "fin.tab.budgets": "Budgets",
     "fin.bud.create": "Create budget", "fin.bud.edit": "Edit budget",
-    "fin.bud.name": "Budget name", "fin.bud.planner": "Planned by (employee)",
+    "fin.bud.name": "Budget name", "fin.bud.desc": "Description", "fin.bud.planner": "Planned by (employee)",
     "fin.bud.status.pending": "Pending review", "fin.bud.status.approved": "Approved", "fin.bud.status.denied": "Denied",
     "fin.bud.approve": "Approve", "fin.bud.deny": "Deny", "fin.bud.open": "Open", "fin.bud.back": "Back",
     "fin.bud.empty": "No budgets yet",
@@ -593,6 +593,7 @@ function budgetDetail(b) {
   const titleCard = `<div class="card" style="margin-bottom:14px">
     <div style="font-weight:800;font-size:18px">${esc(b.name || "—")} <span class="badge" style="background:color-mix(in srgb,${stColor} 16%,transparent);color:${stColor};font-size:11px">${esc(t("fin.bud.status." + st))}</span></div>
     <div class="muted" style="margin-top:2px">${b.planner ? "👤 " + esc(b.planner) : ""}</div>
+    ${b.description ? `<div style="margin-top:8px;white-space:pre-wrap">${esc(b.description)}</div>` : ""}
     ${denialField}
   </div>`;
   const statCards = `<div class="grid cards-3" style="margin-bottom:14px">
@@ -633,6 +634,7 @@ function budgetModal(b) {
     <div class="modal__head"><h3>📋 ${esc(t(editing ? "fin.bud.edit" : "fin.bud.create"))}</h3><button class="icon-btn" data-close>✕</button></div>
     <div class="modal__body">
       <div class="field"><label>${esc(t("fin.bud.name"))}</label><input id="bud_name" value="${esc(x.name || "")}" /></div>
+      <div class="field"><label>${esc(t("fin.bud.desc"))}</label><textarea id="bud_desc">${esc(x.description || "")}</textarea></div>
       <div class="field"><label>${esc(t("fin.bud.planner"))}</label>
         <input id="bud_planner" list="bud_team" autocomplete="off" value="${esc(x.planner || "")}" />
         <datalist id="bud_team">${team.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist></div>
@@ -644,7 +646,7 @@ function budgetModal(b) {
     </div>
     <div class="modal__foot"><button class="btn" data-close>${esc(t("btn.cancel") || "Cancel")}</button><button class="btn btn--primary" data-save>${esc(t("btn.save") || "Save")}</button></div>`);
   ($("[data-save]") || {}).onclick = () => {
-    const data = { name: $("#bud_name").value.trim(), planner: $("#bud_planner").value.trim(), assigned: $("#bud_assigned").value, currency: $("#bud_ccy").value, actual: $("#bud_actual").value };
+    const data = { name: $("#bud_name").value.trim(), description: $("#bud_desc").value.trim(), planner: $("#bud_planner").value.trim(), assigned: $("#bud_assigned").value, currency: $("#bud_ccy").value, actual: $("#bud_actual").value };
     if (!data.name) { $("#bud_name").focus(); return; }
     if (editing) OS().db.updateBudget(b.id, data);
     else OS().db.addBudget({ ...data, status: "pending", denialNote: "", costs: [] });
