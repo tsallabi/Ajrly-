@@ -76,7 +76,7 @@ registerStrings({
     "fin.bud.confirmDel": "حذف هذه الميزانية؟", "fin.bud.vs": "المخصّص مقابل الفعلي",
     "fin.cost.name": "اسم المصروف", "fin.cost.desc": "الوصف", "fin.cost.est": "التكلفة التقديرية",
     "fin.cost.duration": "مدة الخدمة", "fin.cost.provider": "مزوّد الخدمة", "fin.cost.importance": "الأهمية",
-    "fin.cost.attach": "عرض سعر / عقد (PDF أو JPG)", "fin.cost.confirmDel": "حذف هذه التكلفة؟",
+    "fin.cost.attach": "عرض سعر / عقد (PDF أو JPG)", "fin.cost.confirmDel": "حذف هذه التكلفة؟", "fin.cost.paid": "مدفوع",
     "imp.high": "عالية", "imp.medium": "متوسطة", "imp.low": "منخفضة",
     "fin.summaryFor": "ملخص:", "fin.allTime": "كل الفترات", "fin.empty.month": "لا توجد حركات في هذا الشهر",
     "fin.chart.title": "ملخص السنة (شهرياً)",
@@ -154,7 +154,7 @@ registerStrings({
     "fin.bud.confirmDel": "Delete this budget?", "fin.bud.vs": "Assigned vs Actual",
     "fin.cost.name": "Expense name", "fin.cost.desc": "Description", "fin.cost.est": "Estimated cost",
     "fin.cost.duration": "Duration of service", "fin.cost.provider": "Service provider", "fin.cost.importance": "Importance",
-    "fin.cost.attach": "Quote / contract (PDF or JPG)", "fin.cost.confirmDel": "Delete this cost?",
+    "fin.cost.attach": "Quote / contract (PDF or JPG)", "fin.cost.confirmDel": "Delete this cost?", "fin.cost.paid": "Paid",
     "imp.high": "High", "imp.medium": "Medium", "imp.low": "Low",
     "fin.summaryFor": "Summary:", "fin.allTime": "All time", "fin.empty.month": "No entries in this month",
     "fin.chart.title": "Yearly summary (monthly)",
@@ -632,7 +632,7 @@ function budgetDetail(b) {
     costRows = `<div class="empty"><p class="muted">${esc(t("fin.bud.costsEmpty"))}</p></div>`;
   } else {
     costRows = `<div class="table-wrap"><table>
-      <thead><tr><th>${esc(t("fin.cost.name"))}</th><th>${esc(t("fin.cost.provider"))}</th><th>${esc(t("fin.cost.duration"))}</th><th>${esc(t("fin.cost.importance"))}</th><th>${esc(t("fin.cost.est"))}</th><th>📎</th><th></th></tr></thead>
+      <thead><tr><th>${esc(t("fin.cost.name"))}</th><th>${esc(t("fin.cost.provider"))}</th><th>${esc(t("fin.cost.duration"))}</th><th>${esc(t("fin.cost.importance"))}</th><th>${esc(t("fin.cost.est"))}</th><th>${esc(t("fin.cost.paid"))}</th><th>📎</th><th></th></tr></thead>
       <tbody>${costs.map((c, i) => {
         const imp = c.importance || "medium";
         const att = c.attachment ? `<a href="${esc(c.attachment)}" target="_blank" rel="noopener">📎</a>` : "—";
@@ -642,6 +642,7 @@ function budgetDetail(b) {
           <td>${esc(c.provider || "—")}</td><td>${esc(c.duration || "—")}</td>
           <td><span class="badge" style="background:color-mix(in srgb,${impColor[imp]} 16%,transparent);color:${impColor[imp]}">${esc(t("imp." + imp))}</span></td>
           <td style="white-space:nowrap"><b>${money(c.estimatedCost, c.currency)}</b>${usd}</td>
+          <td style="text-align:center">${W ? `<input type="checkbox" class="cost-paid" data-i="${i}" ${c.paid ? "checked" : ""} style="width:auto" />` : (c.paid ? `<span style="color:var(--st-complete)">✓</span>` : "—")}</td>
           <td>${att}</td>
           <td><div class="flex" style="gap:4px">${W ? `<button class="btn btn--ghost btn--sm cost-edit" data-i="${i}">✎</button>` : ""}${W ? `<button class="btn btn--ghost btn--sm btn--danger cost-del" data-i="${i}">🗑</button>` : ""}</div></td>
         </tr>`;
@@ -702,6 +703,7 @@ function costModal(bid, idx) {
         <div class="field"><label>${esc(t("fin.cost.provider"))}</label><input id="c_prov" value="${esc(c.provider || "")}" /></div>
       </div>
       <div class="field"><label>${esc(t("fin.cost.importance"))}</label><select id="c_imp">${IMPORTANCE.map(i => `<option value="${i}" ${(c.importance || "medium") === i ? "selected" : ""}>${esc(t("imp." + i))}</option>`).join("")}</select></div>
+      <label class="flex" style="gap:8px;align-items:center;font-size:13px;cursor:pointer;margin-bottom:4px"><input type="checkbox" id="c_paid" ${c.paid ? "checked" : ""} style="width:auto" /> ✅ ${esc(t("fin.cost.paid"))}</label>
       <div class="field"><label>${esc(t("fin.cost.attach"))}</label><input type="file" id="c_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" /><div id="c_att" class="muted" style="font-size:12px;margin-top:6px"></div></div>
     </div>
     <div class="modal__foot"><button class="btn" data-close>${esc(t("btn.cancel") || "Cancel")}</button><button class="btn btn--primary" data-save>${esc(t("btn.save") || "Save")}</button></div>`);
@@ -723,6 +725,7 @@ function costModal(bid, idx) {
       name: $("#c_name").value.trim(), description: $("#c_desc").value.trim(),
       estimatedCost: $("#c_est").value, currency: $("#c_ccy").value, rate: $("#c_rate").value,
       duration: $("#c_dur").value.trim(), provider: $("#c_prov").value.trim(), importance: $("#c_imp").value,
+      paid: !!($("#c_paid") && $("#c_paid").checked),
       attachment: att ? att.data : "", attachmentName: att ? att.name : "",
     };
     if (!item.name) { $("#c_name").focus(); return; }
@@ -923,6 +926,11 @@ function mount(ctx) {
   const bd = $("#budDenial"); if (bd) bd.onchange = () => { if (budgetOpen) OS().db.updateBudget(budgetOpen, { denialNote: bd.value }); };
   const ca = $("#costAdd"); if (ca) ca.onclick = () => costModal(budgetOpen, null);
   $$(".cost-edit").forEach(b => b.onclick = () => costModal(budgetOpen, parseInt(b.dataset.i, 10)));
+  $$(".cost-paid").forEach(b => b.onchange = () => {
+    const bg = budgets().find(x => x.id === budgetOpen); if (!bg) return;
+    const next = budCosts(bg).slice(); const i = parseInt(b.dataset.i, 10);
+    if (next[i]) { next[i] = { ...next[i], paid: b.checked }; OS().db.updateBudget(budgetOpen, { costs: next }); }
+  });
   $$(".cost-del").forEach(b => b.onclick = () => {
     if (!confirm(t("fin.cost.confirmDel"))) return;
     const bg = budgets().find(x => x.id === budgetOpen); if (!bg) return;
