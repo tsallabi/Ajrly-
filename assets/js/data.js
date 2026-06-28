@@ -49,6 +49,9 @@ const seedNotebook = [];
 /* ---- Seed: Collaborations (company outreach pipeline) ---- */
 const seedCollabs = [];
 
+/* ---- Seed: Budgets (campaign/dev budget planning with cost line-items) ---- */
+const seedBudgets = [];
+
 /* ---- Static reference: Content pillars (from Pillar matrix) ---- */
 export const PILLARS = [
   { name: "Property Discovery", sub: "Core Product", icon: "🔍", purpose: "Help renters discover properties and inspire bookings." },
@@ -82,7 +85,7 @@ export const LINKS = [
 ];
 
 /* ---- Store ---- */
-const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets, activity: seedActivity, contentPosts: seedContentPosts, contentOpts: seedContentOpts, notebook: seedNotebook, collabs: seedCollabs });
+const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets, activity: seedActivity, contentPosts: seedContentPosts, contentOpts: seedContentOpts, notebook: seedNotebook, collabs: seedCollabs, budgets: seedBudgets });
 
 let state = load();
 
@@ -197,6 +200,11 @@ export const db = {
   addCollab(c) { state.collabs.unshift({ ...c, id: uid("cl") }); persist(); },
   updateCollab(id, patch) { state.collabs = state.collabs.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
   removeCollab(id) { state.collabs = state.collabs.filter(x => x.id !== id); persist(); },
+
+  get budgets() { return state.budgets; },
+  addBudget(b) { state.budgets.unshift({ ...b, id: uid("bg") }); persist(); },
+  updateBudget(id, patch) { state.budgets = state.budgets.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
+  removeBudget(id) { state.budgets = state.budgets.filter(x => x.id !== id); persist(); },
 
   reset() { state = defaultState(); persist(); },
   exportJSON() { return JSON.stringify(state, null, 2); },

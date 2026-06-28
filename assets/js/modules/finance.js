@@ -63,6 +63,21 @@ registerStrings({
     "fin.report.generated": "أُنشئ في", "fin.report.entries": "حركة",
     "fin.report.summary": "الملخص", "fin.report.all": "كل الحركات", "fin.report.type": "النوع",
     "fin.report.popup": "اسمح بالنوافذ المنبثقة لإنشاء التقرير",
+    "fin.tab.budgets": "الميزانيات",
+    "fin.bud.create": "إنشاء ميزانية", "fin.bud.edit": "تعديل الميزانية",
+    "fin.bud.name": "اسم الميزانية", "fin.bud.planner": "المخطِّط (الموظف)",
+    "fin.bud.status.pending": "قيد المراجعة", "fin.bud.status.approved": "معتمدة", "fin.bud.status.denied": "مرفوضة",
+    "fin.bud.approve": "اعتماد", "fin.bud.deny": "رفض", "fin.bud.open": "فتح", "fin.bud.back": "رجوع",
+    "fin.bud.empty": "لا توجد ميزانيات بعد",
+    "fin.bud.assigned": "الميزانية المخصّصة", "fin.bud.actual": "الإنفاق الفعلي",
+    "fin.bud.estimated": "التكلفة التقديرية الإجمالية", "fin.bud.remaining": "المتبقّي",
+    "fin.bud.changes": "التغييرات المطلوبة", "fin.bud.changesPh": "حدّد التغييرات المطلوبة على الميزانية…",
+    "fin.bud.addCost": "إضافة تكلفة", "fin.bud.editCost": "تعديل التكلفة", "fin.bud.costsEmpty": "لا توجد تكاليف بعد",
+    "fin.bud.confirmDel": "حذف هذه الميزانية؟", "fin.bud.vs": "المخصّص مقابل الفعلي",
+    "fin.cost.name": "اسم المصروف", "fin.cost.desc": "الوصف", "fin.cost.est": "التكلفة التقديرية",
+    "fin.cost.duration": "مدة الخدمة", "fin.cost.provider": "مزوّد الخدمة", "fin.cost.importance": "الأهمية",
+    "fin.cost.attach": "عرض سعر / عقد (PDF أو JPG)", "fin.cost.confirmDel": "حذف هذه التكلفة؟",
+    "imp.high": "عالية", "imp.medium": "متوسطة", "imp.low": "منخفضة",
     "fin.summaryFor": "ملخص:", "fin.allTime": "كل الفترات", "fin.empty.month": "لا توجد حركات في هذا الشهر",
     "fin.chart.title": "ملخص السنة (شهرياً)",
     "fin.empty.expense": "لا توجد مصروفات بعد",
@@ -126,6 +141,21 @@ registerStrings({
     "fin.report.generated": "Generated", "fin.report.entries": "entries",
     "fin.report.summary": "Summary", "fin.report.all": "All transactions", "fin.report.type": "Type",
     "fin.report.popup": "Allow pop-ups to generate the report",
+    "fin.tab.budgets": "Budgets",
+    "fin.bud.create": "Create budget", "fin.bud.edit": "Edit budget",
+    "fin.bud.name": "Budget name", "fin.bud.planner": "Planned by (employee)",
+    "fin.bud.status.pending": "Pending review", "fin.bud.status.approved": "Approved", "fin.bud.status.denied": "Denied",
+    "fin.bud.approve": "Approve", "fin.bud.deny": "Deny", "fin.bud.open": "Open", "fin.bud.back": "Back",
+    "fin.bud.empty": "No budgets yet",
+    "fin.bud.assigned": "Assigned budget", "fin.bud.actual": "Actual spending",
+    "fin.bud.estimated": "Estimated total cost", "fin.bud.remaining": "Remaining",
+    "fin.bud.changes": "Changes needed", "fin.bud.changesPh": "Specify the changes needed on this budget…",
+    "fin.bud.addCost": "Add cost", "fin.bud.editCost": "Edit cost", "fin.bud.costsEmpty": "No costs yet",
+    "fin.bud.confirmDel": "Delete this budget?", "fin.bud.vs": "Assigned vs Actual",
+    "fin.cost.name": "Expense name", "fin.cost.desc": "Description", "fin.cost.est": "Estimated cost",
+    "fin.cost.duration": "Duration of service", "fin.cost.provider": "Service provider", "fin.cost.importance": "Importance",
+    "fin.cost.attach": "Quote / contract (PDF or JPG)", "fin.cost.confirmDel": "Delete this cost?",
+    "imp.high": "High", "imp.medium": "Medium", "imp.low": "Low",
     "fin.summaryFor": "Summary:", "fin.allTime": "All time", "fin.empty.month": "No entries in this month",
     "fin.chart.title": "Yearly summary (monthly)",
     "fin.empty.expense": "No expenses yet",
@@ -173,6 +203,7 @@ let finCcy = "";        // selected currency for the chart ("" => most common)
 let finMonth = "";      // summary month filter "YYYY-MM" ("" => all time)
 let finCatFilter = "";  // category filter ("" => all categories)
 let finSettings = false; // settings (dropdown manager) expanded?
+let budgetOpen = null;   // id of the open budget (cost page), or null for the list
 
 const MONTHS = {
   en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
@@ -485,12 +516,208 @@ function settingsCard() {
   </div>`;
 }
 
+/* ---------------- budgets ---------------- */
+const budgets = () => (OS().db && OS().db.budgets) || [];
+const IMPORTANCE = ["high", "medium", "low"];
+const impColor = { high: "var(--st-overdue,#ef4444)", medium: "#d97706", low: "var(--st-complete)" };
+const canApprove = () => can("del"); // managers/admins approve/deny
+function budCosts(b) {
+  const c = b && b.costs;
+  if (Array.isArray(c)) return c;
+  if (typeof c === "string" && c) { try { const p = JSON.parse(c); return Array.isArray(p) ? p : []; } catch (_) { return []; } }
+  return [];
+}
+const costUsd = (c) => { const r = num(c.rate); return r ? num(c.estimatedCost) / r : 0; };
+const budEstUsd = (b) => budCosts(b).reduce((s, c) => s + costUsd(c), 0);
+
+function budgetsView() {
+  if (budgetOpen) {
+    const b = budgets().find(x => x.id === budgetOpen);
+    if (b) return budgetDetail(b);
+    budgetOpen = null;
+  }
+  return budgetList();
+}
+
+function budgetList() {
+  const W = can("write");
+  const list = budgets();
+  const createBtn = W ? `<div class="toolbar"><div class="toolbar__right"><button class="btn btn--primary" id="budCreate">＋ ${esc(t("fin.bud.create"))}</button></div></div>` : "";
+  if (!list.length) return `${createBtn}<div class="card"><div class="empty"><div class="empty__icon">📋</div><p class="muted">${esc(t("fin.bud.empty"))}</p></div></div>`;
+  const rows = list.map(b => {
+    const st = b.status || "pending";
+    const stColor = st === "approved" ? "var(--st-complete)" : st === "denied" ? "var(--st-overdue,#ef4444)" : "var(--muted)";
+    const estUsd = budEstUsd(b);
+    const approveBtn = (canApprove() && st !== "approved") ? `<button class="btn btn--sm bud-approve" data-bid="${b.id}" style="background:var(--st-complete);color:#fff;border-color:var(--st-complete)">✓ ${esc(t("fin.bud.approve"))}</button>` : "";
+    const denyBtn = (canApprove() && st !== "denied") ? `<button class="btn btn--sm bud-deny" data-bid="${b.id}" style="background:var(--st-overdue,#ef4444);color:#fff;border-color:var(--st-overdue,#ef4444)">✕ ${esc(t("fin.bud.deny"))}</button>` : "";
+    return `<div class="card" style="margin-bottom:10px">
+      <div class="flex between" style="align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px">
+          <div style="font-weight:700;font-size:15px">${esc(b.name || "—")} <span class="badge" style="background:color-mix(in srgb,${stColor} 16%,transparent);color:${stColor};font-size:11px">${esc(t("fin.bud.status." + st))}</span></div>
+          <div class="muted" style="font-size:12.5px;margin-top:2px">${b.planner ? "👤 " + esc(b.planner) : ""}</div>
+          <div class="muted" style="font-size:12.5px;margin-top:4px">${esc(t("fin.bud.assigned"))}: ${b.assigned ? money(b.assigned, b.currency) : "—"} · ${esc(t("fin.bud.actual"))}: ${b.actual ? money(b.actual, b.currency) : "—"}${estUsd ? ` · ${esc(t("fin.bud.estimated"))}: ${money(estUsd, "USD")}` : ""}</div>
+          ${st === "denied" && b.denialNote ? `<div style="margin-top:6px;color:var(--st-overdue,#ef4444);font-size:12.5px">⚠ ${esc(t("fin.bud.changes"))}: ${esc(b.denialNote)}</div>` : ""}
+        </div>
+        <div class="flex" style="gap:6px;flex-wrap:wrap">
+          ${approveBtn}${denyBtn}
+          <button class="btn btn--sm bud-open" data-bid="${b.id}">${esc(t("fin.bud.open"))} →</button>
+          ${can("del") ? `<button class="btn btn--ghost btn--sm btn--danger bud-del" data-bid="${b.id}">🗑</button>` : ""}
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  return `${createBtn}${rows}`;
+}
+
+function budgetDetail(b) {
+  const W = can("write");
+  const st = b.status || "pending";
+  const costs = budCosts(b);
+  const estUsd = budEstUsd(b);
+  const byCcy = {}; costs.forEach(c => { const cc = c.currency || b.currency || "LYD"; byCcy[cc] = (byCcy[cc] || 0) + num(c.estimatedCost); });
+  const estLines = Object.keys(byCcy).map(cc => money(byCcy[cc], cc)).join(" · ");
+  const assigned = num(b.assigned), actual = num(b.actual), remaining = assigned - actual;
+  const remColor = remaining >= 0 ? "var(--st-complete)" : "var(--st-overdue,#ef4444)";
+  const stColor = st === "approved" ? "var(--st-complete)" : st === "denied" ? "var(--st-overdue,#ef4444)" : "var(--muted)";
+  const header = `<div class="flex between" style="align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <button class="btn btn--ghost btn--sm" id="budBack">← ${esc(t("fin.bud.back"))}</button>
+    <div class="flex" style="gap:6px">
+      ${(canApprove() && st !== "approved") ? `<button class="btn btn--sm bud-approve" data-bid="${b.id}" style="background:var(--st-complete);color:#fff;border-color:var(--st-complete)">✓ ${esc(t("fin.bud.approve"))}</button>` : ""}
+      ${(canApprove() && st !== "denied") ? `<button class="btn btn--sm bud-deny" data-bid="${b.id}" style="background:var(--st-overdue,#ef4444);color:#fff;border-color:var(--st-overdue,#ef4444)">✕ ${esc(t("fin.bud.deny"))}</button>` : ""}
+      ${W ? `<button class="btn btn--ghost btn--sm" id="budEdit">✎</button>` : ""}
+    </div>
+  </div>`;
+  const denialField = canApprove()
+    ? `<div class="field" style="margin-top:10px"><label>⚠ ${esc(t("fin.bud.changes"))}</label><textarea id="budDenial" placeholder="${esc(t("fin.bud.changesPh"))}">${esc(b.denialNote || "")}</textarea></div>`
+    : (b.denialNote ? `<div style="margin-top:8px;color:var(--st-overdue,#ef4444)">⚠ ${esc(t("fin.bud.changes"))}: ${esc(b.denialNote)}</div>` : "");
+  const titleCard = `<div class="card" style="margin-bottom:14px">
+    <div style="font-weight:800;font-size:18px">${esc(b.name || "—")} <span class="badge" style="background:color-mix(in srgb,${stColor} 16%,transparent);color:${stColor};font-size:11px">${esc(t("fin.bud.status." + st))}</span></div>
+    <div class="muted" style="margin-top:2px">${b.planner ? "👤 " + esc(b.planner) : ""}</div>
+    ${denialField}
+  </div>`;
+  const statCards = `<div class="grid cards-3" style="margin-bottom:14px">
+    <div class="card stat"><span class="stat__value">${money(assigned, b.currency)}</span><span class="stat__label">${esc(t("fin.bud.assigned"))}</span></div>
+    <div class="card stat"><span class="stat__value">${money(actual, b.currency)}</span><span class="stat__label">${esc(t("fin.bud.actual"))}</span></div>
+    <div class="card stat"><span class="stat__value" style="color:${remColor}">${money(remaining, b.currency)}</span><span class="stat__label">${esc(t("fin.bud.remaining"))}</span></div>
+  </div>`;
+  const addCostBtn = W ? `<button class="btn btn--primary btn--sm" id="costAdd">＋ ${esc(t("fin.bud.addCost"))}</button>` : "";
+  const estLine = `<span class="card__title">${esc(t("fin.bud.estimated"))}: ${estLines || "0"}${estUsd ? ` <span class="muted" style="font-size:12px">(≈ ${money(estUsd, "USD")})</span>` : ""}</span>`;
+  let costRows;
+  if (!costs.length) {
+    costRows = `<div class="empty"><p class="muted">${esc(t("fin.bud.costsEmpty"))}</p></div>`;
+  } else {
+    costRows = `<div class="table-wrap"><table>
+      <thead><tr><th>${esc(t("fin.cost.name"))}</th><th>${esc(t("fin.cost.provider"))}</th><th>${esc(t("fin.cost.duration"))}</th><th>${esc(t("fin.cost.importance"))}</th><th>${esc(t("fin.cost.est"))}</th><th>📎</th><th></th></tr></thead>
+      <tbody>${costs.map((c, i) => {
+        const imp = c.importance || "medium";
+        const att = c.attachment ? `<a href="${esc(c.attachment)}" target="_blank" rel="noopener">📎</a>` : "—";
+        const usd = (c.currency !== "USD" && num(c.rate)) ? `<div class="muted" style="font-size:11px">≈ ${money(costUsd(c), "USD")}</div>` : "";
+        return `<tr>
+          <td><div class="cell-title">${esc(c.name || "—")}</div>${c.description ? `<div class="muted" style="font-size:11.5px;max-width:260px">${esc(c.description)}</div>` : ""}</td>
+          <td>${esc(c.provider || "—")}</td><td>${esc(c.duration || "—")}</td>
+          <td><span class="badge" style="background:color-mix(in srgb,${impColor[imp]} 16%,transparent);color:${impColor[imp]}">${esc(t("imp." + imp))}</span></td>
+          <td style="white-space:nowrap"><b>${money(c.estimatedCost, c.currency)}</b>${usd}</td>
+          <td>${att}</td>
+          <td><div class="flex" style="gap:4px">${W ? `<button class="btn btn--ghost btn--sm cost-edit" data-i="${i}">✎</button>` : ""}${W ? `<button class="btn btn--ghost btn--sm btn--danger cost-del" data-i="${i}">🗑</button>` : ""}</div></td>
+        </tr>`;
+      }).join("")}</tbody></table></div>`;
+  }
+  const costsCard = `<div class="card"><div class="card__head">${estLine}${addCostBtn}</div>${costRows}</div>`;
+  return `<div>${header}${titleCard}${statCards}${costsCard}</div>`;
+}
+
+function budgetModal(b) {
+  const x = b || {}; const editing = !!b;
+  let team = OS().team; team = typeof team === "function" ? (team() || []) : (Array.isArray(team) ? team : []);
+  OS().openModal(`
+    <div class="modal__head"><h3>📋 ${esc(t(editing ? "fin.bud.edit" : "fin.bud.create"))}</h3><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal__body">
+      <div class="field"><label>${esc(t("fin.bud.name"))}</label><input id="bud_name" value="${esc(x.name || "")}" /></div>
+      <div class="field"><label>${esc(t("fin.bud.planner"))}</label>
+        <input id="bud_planner" list="bud_team" autocomplete="off" value="${esc(x.planner || "")}" />
+        <datalist id="bud_team">${team.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist></div>
+      <div class="field-row">
+        <div class="field"><label>${esc(t("fin.bud.assigned"))}</label><input type="number" step="any" id="bud_assigned" value="${esc(x.assigned || "")}" /></div>
+        <div class="field"><label>${esc(t("fin.f.currency"))}</label><select id="bud_ccy">${CURRENCIES.map(c => `<option ${(x.currency || "LYD") === c ? "selected" : ""}>${c}</option>`).join("")}</select></div>
+      </div>
+      <div class="field"><label>${esc(t("fin.bud.actual"))}</label><input type="number" step="any" id="bud_actual" value="${esc(x.actual || "")}" /></div>
+    </div>
+    <div class="modal__foot"><button class="btn" data-close>${esc(t("btn.cancel") || "Cancel")}</button><button class="btn btn--primary" data-save>${esc(t("btn.save") || "Save")}</button></div>`);
+  ($("[data-save]") || {}).onclick = () => {
+    const data = { name: $("#bud_name").value.trim(), planner: $("#bud_planner").value.trim(), assigned: $("#bud_assigned").value, currency: $("#bud_ccy").value, actual: $("#bud_actual").value };
+    if (!data.name) { $("#bud_name").focus(); return; }
+    if (editing) OS().db.updateBudget(b.id, data);
+    else OS().db.addBudget({ ...data, status: "pending", denialNote: "", costs: [] });
+    OS().closeModal(); (OS().render || (() => {}))(); OS().toast(t("fin.saved"));
+  };
+  $$("[data-close]").forEach(bt => bt.onclick = OS().closeModal);
+}
+
+function costModal(bid, idx) {
+  const b = budgets().find(x => x.id === bid); if (!b) return;
+  const list = budCosts(b);
+  const c = (idx != null && list[idx]) ? list[idx] : {};
+  let att = c.attachment ? { data: c.attachment, name: c.attachmentName || "file" } : null;
+  OS().openModal(`
+    <div class="modal__head"><h3>💵 ${esc(t(idx != null ? "fin.bud.editCost" : "fin.bud.addCost"))}</h3><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal__body">
+      <div class="field"><label>${esc(t("fin.cost.name"))}</label><input id="c_name" value="${esc(c.name || "")}" /></div>
+      <div class="field"><label>${esc(t("fin.cost.desc"))}</label><textarea id="c_desc">${esc(c.description || "")}</textarea></div>
+      <div class="field-row">
+        <div class="field"><label>${esc(t("fin.cost.est"))}</label><input type="number" step="any" id="c_est" value="${esc(c.estimatedCost || "")}" /></div>
+        <div class="field"><label>${esc(t("fin.f.currency"))}</label><select id="c_ccy">${CURRENCIES.map(cc => `<option ${(c.currency || b.currency || "LYD") === cc ? "selected" : ""}>${cc}</option>`).join("")}</select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>${esc(t("fin.f.rate"))}</label><input type="number" step="any" id="c_rate" value="${esc(c.rate || ((c.currency || b.currency || "LYD") === "USD" ? "1" : ""))}" placeholder="1 USD = ?" /></div>
+        <div class="field"><label>${esc(t("fin.f.usd"))}</label><input id="c_usd" disabled /></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>${esc(t("fin.cost.duration"))}</label><input id="c_dur" value="${esc(c.duration || "")}" /></div>
+        <div class="field"><label>${esc(t("fin.cost.provider"))}</label><input id="c_prov" value="${esc(c.provider || "")}" /></div>
+      </div>
+      <div class="field"><label>${esc(t("fin.cost.importance"))}</label><select id="c_imp">${IMPORTANCE.map(i => `<option value="${i}" ${(c.importance || "medium") === i ? "selected" : ""}>${esc(t("imp." + i))}</option>`).join("")}</select></div>
+      <div class="field"><label>${esc(t("fin.cost.attach"))}</label><input type="file" id="c_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" /><div id="c_att" class="muted" style="font-size:12px;margin-top:6px"></div></div>
+    </div>
+    <div class="modal__foot"><button class="btn" data-close>${esc(t("btn.cancel") || "Cancel")}</button><button class="btn btn--primary" data-save>${esc(t("btn.save") || "Save")}</button></div>`);
+  const recalc = () => { const r = num($("#c_rate") && $("#c_rate").value); const usd = r ? num($("#c_est").value) / r : 0; const box = $("#c_usd"); if (box) box.value = usd ? money(usd, "USD") : "—"; };
+  ["#c_est", "#c_rate"].forEach(s => { const el = $(s); if (el) el.oninput = recalc; });
+  const ccy = $("#c_ccy"); if (ccy) ccy.onchange = () => { const r = $("#c_rate"); if (ccy.value === "USD" && r && !num(r.value)) r.value = "1"; recalc(); };
+  recalc();
+  const showAtt = () => { const bx = $("#c_att"); if (bx) bx.textContent = att && att.name ? "📎 " + att.name : ""; };
+  showAtt();
+  const file = $("#c_file");
+  if (file) file.onchange = () => {
+    const f = file.files && file.files[0]; if (!f) return;
+    if (!ALLOWED.test(f.name)) { OS().toast(t("fin.attach.bad_type")); file.value = ""; return; }
+    if (f.size > MAX_ATT) { OS().toast(t("fin.attach.too_big")); file.value = ""; return; }
+    const r = new FileReader(); r.onload = () => { att = { data: String(r.result || ""), name: f.name }; showAtt(); }; r.readAsDataURL(f);
+  };
+  ($("[data-save]") || {}).onclick = () => {
+    const item = {
+      name: $("#c_name").value.trim(), description: $("#c_desc").value.trim(),
+      estimatedCost: $("#c_est").value, currency: $("#c_ccy").value, rate: $("#c_rate").value,
+      duration: $("#c_dur").value.trim(), provider: $("#c_prov").value.trim(), importance: $("#c_imp").value,
+      attachment: att ? att.data : "", attachmentName: att ? att.name : "",
+    };
+    if (!item.name) { $("#c_name").focus(); return; }
+    const next = budCosts(b).slice();
+    if (idx != null) next[idx] = item; else next.push(item);
+    OS().db.updateBudget(b.id, { costs: next });
+    OS().closeModal(); (OS().render || (() => {}))(); OS().toast(t("fin.saved"));
+  };
+  $$("[data-close]").forEach(bt => bt.onclick = OS().closeModal);
+}
+
 function view() {
   const W = can("write");
   const tabs = `<div class="seg" id="finTabs">
     <button data-fintab="expense" class="${finTab === "expense" ? "active" : ""}">🧾 ${esc(t("fin.tab.expense"))}</button>
     <button data-fintab="income" class="${finTab === "income" ? "active" : ""}">📈 ${esc(t("fin.tab.income"))}</button>
+    <button data-fintab="budgets" class="${finTab === "budgets" ? "active" : ""}">📋 ${esc(t("fin.tab.budgets"))}</button>
   </div>`;
+  if (finTab === "budgets") {
+    return `<div><div class="toolbar"><div class="toolbar__left">${tabs}</div></div>${budgetsView()}</div>`;
+  }
   const addBtn = W
     ? `<button class="btn btn--primary" id="finAdd">＋ ${esc(t("fin.add." + finTab))}</button>`
     : "";
@@ -658,6 +885,24 @@ function mount(ctx) {
   const cf = $("#finCatFilter"); if (cf) cf.onchange = (e) => { finCatFilter = e.target.value; reRender(); };
   const pb = $("#finPrint"); if (pb) pb.onclick = printReport;
   const ccl = $("#finClearCat"); if (ccl) ccl.onclick = () => { finCatFilter = ""; reRender(); };
+
+  // ---- budgets ----
+  const bc = $("#budCreate"); if (bc) bc.onclick = () => budgetModal(null);
+  const bb = $("#budBack"); if (bb) bb.onclick = () => { budgetOpen = null; reRender(); };
+  const be = $("#budEdit"); if (be) be.onclick = () => budgetModal(budgets().find(x => x.id === budgetOpen));
+  $$(".bud-open").forEach(b => b.onclick = () => { budgetOpen = b.dataset.bid; reRender(); });
+  $$(".bud-approve").forEach(b => b.onclick = () => { OS().db.updateBudget(b.dataset.bid, { status: "approved", denialNote: "" }); reRender(); OS().toast(t("fin.saved")); });
+  $$(".bud-deny").forEach(b => b.onclick = () => { OS().db.updateBudget(b.dataset.bid, { status: "denied" }); budgetOpen = b.dataset.bid; reRender(); });
+  $$(".bud-del").forEach(b => b.onclick = () => { if (!confirm(t("fin.bud.confirmDel"))) return; OS().db.removeBudget(b.dataset.bid); if (budgetOpen === b.dataset.bid) budgetOpen = null; reRender(); OS().toast(t("fin.deleted")); });
+  const bd = $("#budDenial"); if (bd) bd.onchange = () => { if (budgetOpen) OS().db.updateBudget(budgetOpen, { denialNote: bd.value }); };
+  const ca = $("#costAdd"); if (ca) ca.onclick = () => costModal(budgetOpen, null);
+  $$(".cost-edit").forEach(b => b.onclick = () => costModal(budgetOpen, parseInt(b.dataset.i, 10)));
+  $$(".cost-del").forEach(b => b.onclick = () => {
+    if (!confirm(t("fin.cost.confirmDel"))) return;
+    const bg = budgets().find(x => x.id === budgetOpen); if (!bg) return;
+    const next = budCosts(bg).slice(); next.splice(parseInt(b.dataset.i, 10), 1);
+    OS().db.updateBudget(budgetOpen, { costs: next }); reRender(); OS().toast(t("fin.deleted"));
+  });
 
   // settings: manage the editable dropdowns
   const sb = $("#finSettingsBtn"); if (sb) sb.onclick = () => { finSettings = !finSettings; reRender(); };

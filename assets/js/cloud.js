@@ -129,6 +129,7 @@ export async function pull() {
     contentOpts: data.contentOpts,
     notebook: data.notebook,
     collabs: data.collabs,
+    budgets: data.budgets,
     users: data.users || [],
     ts: data.ts || Date.now(),
   };
@@ -159,6 +160,7 @@ const _contentPosts = makeCrud("content-posts");
 const _contentOpts = makeCrud("content-opts");
 const _notebook = makeCrud("notebook");
 const _collabs = makeCrud("collaborations");
+const _budgets = makeCrud("budgets");
 
 /* Tasks */
 export const createTask = (p) => _tasks.create(p);
@@ -200,6 +202,10 @@ export const removeNotebookPage = (id) => _notebook.remove(id);
 export const createCollab = (p) => _collabs.create(p);
 export const updateCollab = (id, p) => _collabs.update(id, p);
 export const removeCollab = (id) => _collabs.remove(id);
+/* Budgets */
+export const createBudget = (p) => _budgets.create(p);
+export const updateBudget = (id, p) => _budgets.update(id, p);
+export const removeBudget = (id) => _budgets.remove(id);
 
 /* Clean default export for ergonomic importing. */
 const cloud = {
@@ -219,5 +225,6 @@ const cloud = {
   createContentOpt, updateContentOpt, removeContentOpt,
   createNotebookPage, updateNotebookPage, removeNotebookPage,
   createCollab, updateCollab, removeCollab,
+  createBudget, updateBudget, removeBudget,
 };
 export default cloud;
