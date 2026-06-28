@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=74";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=75";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=74";
-import "./modules/ownerContent.js?v=74";
-import "./modules/assets.js?v=74";
-import "./modules/account.js?v=74";
-import "./modules/team.js?v=74";
-import "./modules/performance.js?v=74";
+import "./modules/finance.js?v=75";
+import "./modules/ownerContent.js?v=75";
+import "./modules/assets.js?v=75";
+import "./modules/account.js?v=75";
+import "./modules/team.js?v=75";
+import "./modules/performance.js?v=75";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=74";
-import AjrlyPresence from "./presence.js?v=74"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=75";
+import AjrlyPresence from "./presence.js?v=75"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -73,6 +73,7 @@ registerStrings({
     "timer.col": "وقت العمل", "timer.start": "بدء المؤقّت", "timer.stop": "إيقاف المؤقّت",
     "timer.running": "قيد التشغيل", "timer.tracked": "الوقت المسجّل",
     "timer.locked": "اكتملت المهمة — لا يمكن إضافة وقت",
+    "timer.creditTo": "الوقت محسوب لـ",
     "pf.m.hours": "ساعات العمل (هذا الأسبوع)",
     "field.repeat": "التكرار", "repeat.none": "بدون تكرار", "repeat.daily": "يومياً", "repeat.weekly": "أسبوعياً", "repeat.monthly": "شهرياً",
   },
@@ -81,6 +82,7 @@ registerStrings({
     "timer.col": "Work time", "timer.start": "Start timer", "timer.stop": "Stop timer",
     "timer.running": "running", "timer.tracked": "Tracked time",
     "timer.locked": "Task is complete — no time can be added",
+    "timer.creditTo": "Credit time to",
     "pf.m.hours": "Work hours (this week)",
     "field.repeat": "Repeat", "repeat.none": "No repeat", "repeat.daily": "Daily", "repeat.weekly": "Weekly", "repeat.monthly": "Monthly",
   },
@@ -297,6 +299,17 @@ function fmtDur(sec) {
   const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
   return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 }
+/* parse a manual tracked-time entry into seconds: "h:mm:ss" / "m:ss" /
+   a plain number (= minutes). */
+function parseDur(str) {
+  str = String(str || "").trim();
+  if (!str) return 0;
+  if (/^\d+$/.test(str)) return parseInt(str, 10) * 60;
+  const p = str.split(":").map((n) => parseInt(n, 10) || 0);
+  if (p.length === 3) return p[0] * 3600 + p[1] * 60 + p[2];
+  if (p.length === 2) return p[0] * 60 + p[1];
+  return 0;
+}
 /* one-time cleanup: a completed/closed task should never carry a live timer.
    Clear any stale timerStart on locked tasks so they stop counting. */
 function healStuckTimers() {
@@ -509,7 +522,16 @@ function taskModal(task, prefill) {
         <div class="field"><label>${t("field.duration")}</label><input id="f_dur" placeholder="00:30" value="${esc(x.duration || "")}" /></div>
       </div>
       <div class="field"><label>🔁 ${t("field.repeat")}</label><select id="f_repeat">${["none","daily","weekly","monthly"].map(r => opt(r, (x.repeat || "none"), t("repeat." + r))).join("")}</select></div>
-      ${editing ? `<div class="field"><label>⏱️ ${t("timer.tracked")}</label><input value="${esc(fmtDur(taskTotalSeconds(x)))}${taskRunning(x) ? " · " + esc(t("timer.running")) : ""}" disabled /></div>` : ""}
+      ${editing ? (taskRunning(x) || taskLocked(x)
+        ? `<div class="field"><label>⏱️ ${t("timer.tracked")}</label><input value="${esc(fmtDur(taskTotalSeconds(x)))}${taskRunning(x) ? " · " + esc(t("timer.running")) : ""}" disabled /></div>`
+        : (() => {
+            const sess = taskSessions(x);
+            const curCredit = (sess.length === 1 ? (sess[0].by || "") : "") || x.delegateTo || (activeUser() && activeUser().name) || "";
+            return `<div class="field-row">
+              <div class="field"><label>⏱️ ${t("timer.tracked")}</label><input id="f_tracked" value="${esc(fmtDur(taskTotalSeconds(x)))}" placeholder="h:mm:ss" /></div>
+              <div class="field"><label>${t("timer.creditTo")}</label><select id="f_credit"><option value=""></option>${team().map(m => opt(m, curCredit, m)).join("")}</select></div>
+            </div>`;
+          })()) : ""}
       <div class="field-row">
         <div class="field"><label>${t("task.owner")}</label><select id="f_owner" ${lockOwner ? "disabled" : ""}>
           <option value="">—</option>
@@ -546,6 +568,20 @@ function taskModal(task, prefill) {
     }
     // finalize a running timer when the task is being completed/closed
     if (editing && (data.status === "complete" || data.status === "closed")) Object.assign(data, finalizeTimer(task));
+    // manual tracked-time edit + credit (only when the field is shown — not
+    // running/locked). Rewrites the log to one session of the entered time,
+    // credited to the chosen person; only when time or credit actually changed.
+    const trk = $("#f_tracked");
+    if (editing && trk) {
+      const sess0 = taskSessions(task);
+      const defCredit = (sess0.length === 1 ? (sess0[0].by || "") : "") || task.delegateTo || (activeUser() && activeUser().name) || "";
+      const entered = parseDur(trk.value);
+      const credit = $("#f_credit") ? $("#f_credit").value : "";
+      if (entered !== taskTotalSeconds(task) || credit !== defCredit) {
+        data.timeLog = entered > 0 ? [{ seconds: entered, by: credit || defCredit, manual: true, end: new Date().toISOString() }] : [];
+        data.timerStart = "";
+      }
+    }
     if (editing) db.updateTask(task.id, data); else db.addTask(data);
     closeModal(); render(); toast(t("toast.saved"));
   };
