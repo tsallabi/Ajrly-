@@ -136,6 +136,7 @@ export const TASKS = {
     { col: "contact_method", key: "contactMethod" },
     { col: "time_log", key: "timeLog", json: true },
     { col: "timer_start", key: "timerStart" },
+    { col: "timer_by", key: "timerBy" },
     { col: "repeat", key: "repeat" },
     { col: "series_id", key: "seriesId" },
   ],

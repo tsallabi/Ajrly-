@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=73";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=74";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=73";
-import "./modules/ownerContent.js?v=73";
-import "./modules/assets.js?v=73";
-import "./modules/account.js?v=73";
-import "./modules/team.js?v=73";
-import "./modules/performance.js?v=73";
+import "./modules/finance.js?v=74";
+import "./modules/ownerContent.js?v=74";
+import "./modules/assets.js?v=74";
+import "./modules/account.js?v=74";
+import "./modules/team.js?v=74";
+import "./modules/performance.js?v=74";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=73";
-import AjrlyPresence from "./presence.js?v=73"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=74";
+import AjrlyPresence from "./presence.js?v=74"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -302,12 +302,15 @@ function fmtDur(sec) {
 function healStuckTimers() {
   (db.tasks || []).forEach((x) => { if (taskLocked(x) && x.timerStart) db.updateTask(x.id, { timerStart: "" }); });
 }
-/* close a running session into the log (no-op if not running) */
+/* close a running session into the log (no-op if not running). The session is
+   credited to whoever STARTED the timer (timerBy), not whoever stops it — so
+   pausing a teammate's timer doesn't add their hours to your account. */
 function finalizeTimer(x) {
   if (!x.timerStart) return {};
   const sessions = taskSessions(x).slice();
-  sessions.push({ start: x.timerStart, end: new Date().toISOString(), seconds: taskLiveSeconds(x), by: (activeUser() && activeUser().name) || "" });
-  return { timeLog: sessions, timerStart: "" };
+  const by = x.timerBy || (activeUser() && activeUser().name) || "";
+  sessions.push({ start: x.timerStart, end: new Date().toISOString(), seconds: taskLiveSeconds(x), by });
+  return { timeLog: sessions, timerStart: "", timerBy: "" };
 }
 function toggleTaskTimer(id) {
   const x = db.tasks.find(t => t.id === id);
@@ -316,7 +319,8 @@ function toggleTaskTimer(id) {
   if (x.timerStart) {
     db.updateTask(id, finalizeTimer(x));
   } else {
-    const patch = { timerStart: new Date().toISOString() };
+    // record who started it so the time is credited to them, not the stopper
+    const patch = { timerStart: new Date().toISOString(), timerBy: (activeUser() && activeUser().name) || "" };
     // starting work moves a pending task into "In Progress" automatically
     if (x.status === "pending") patch.status = "progress";
     db.updateTask(id, patch);
