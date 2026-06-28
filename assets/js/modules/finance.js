@@ -70,7 +70,7 @@ registerStrings({
     "fin.bud.approve": "اعتماد", "fin.bud.deny": "رفض", "fin.bud.open": "فتح", "fin.bud.back": "رجوع",
     "fin.bud.empty": "لا توجد ميزانيات بعد",
     "fin.bud.assigned": "الميزانية المخصّصة", "fin.bud.actual": "الإنفاق الفعلي",
-    "fin.bud.estimated": "التكلفة التقديرية الإجمالية", "fin.bud.remaining": "المتبقّي",
+    "fin.bud.estimated": "التكلفة التقديرية الإجمالية", "fin.bud.remaining": "المتبقّي", "fin.bud.estReq": "الميزانية التقديرية المطلوبة",
     "fin.bud.changes": "التغييرات المطلوبة", "fin.bud.changesPh": "حدّد التغييرات المطلوبة على الميزانية…",
     "fin.bud.addCost": "إضافة تكلفة", "fin.bud.editCost": "تعديل التكلفة", "fin.bud.costsEmpty": "لا توجد تكاليف بعد",
     "fin.bud.confirmDel": "حذف هذه الميزانية؟", "fin.bud.vs": "المخصّص مقابل الفعلي",
@@ -148,7 +148,7 @@ registerStrings({
     "fin.bud.approve": "Approve", "fin.bud.deny": "Deny", "fin.bud.open": "Open", "fin.bud.back": "Back",
     "fin.bud.empty": "No budgets yet",
     "fin.bud.assigned": "Assigned budget", "fin.bud.actual": "Actual spending",
-    "fin.bud.estimated": "Estimated total cost", "fin.bud.remaining": "Remaining",
+    "fin.bud.estimated": "Estimated total cost", "fin.bud.remaining": "Remaining", "fin.bud.estReq": "Estimated required",
     "fin.bud.changes": "Changes needed", "fin.bud.changesPh": "Specify the changes needed on this budget…",
     "fin.bud.addCost": "Add cost", "fin.bud.editCost": "Edit cost", "fin.bud.costsEmpty": "No costs yet",
     "fin.bud.confirmDel": "Delete this budget?", "fin.bud.vs": "Assigned vs Actual",
@@ -596,8 +596,14 @@ function budgetDetail(b) {
     ${b.description ? `<div style="margin-top:8px;white-space:pre-wrap">${esc(b.description)}</div>` : ""}
     ${denialField}
   </div>`;
-  const statCards = `<div class="grid cards-3" style="margin-bottom:14px">
+  // estimated required = total of the cost line-items (single currency if they
+  // all share one, otherwise the unified USD total)
+  const ccyKeys = Object.keys(byCcy);
+  const estReq = ccyKeys.length === 1 ? money(byCcy[ccyKeys[0]], ccyKeys[0])
+    : (ccyKeys.length === 0 ? money(0, b.currency) : money(estUsd, "USD"));
+  const statCards = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px">
     <div class="card stat"><span class="stat__value">${money(assigned, b.currency)}</span><span class="stat__label">${esc(t("fin.bud.assigned"))}</span></div>
+    <div class="card stat"><span class="stat__value" style="color:var(--brand)">${estReq}</span><span class="stat__label">${esc(t("fin.bud.estReq"))}</span></div>
     <div class="card stat"><span class="stat__value">${money(actual, b.currency)}</span><span class="stat__label">${esc(t("fin.bud.actual"))}</span></div>
     <div class="card stat"><span class="stat__value" style="color:${remColor}">${money(remaining, b.currency)}</span><span class="stat__label">${esc(t("fin.bud.remaining"))}</span></div>
   </div>`;
