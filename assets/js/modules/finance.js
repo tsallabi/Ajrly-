@@ -529,6 +529,23 @@ function budCosts(b) {
 }
 const costUsd = (c) => { const r = num(c.rate); return r ? num(c.estimatedCost) / r : 0; };
 const budEstUsd = (b) => budCosts(b).reduce((s, c) => s + costUsd(c), 0);
+/* Actual spending = the budget's manual "actual" PLUS every expense whose
+   category exactly matches the budget name. Same-currency amounts add
+   directly; for a USD budget, other-currency expenses convert via their rate. */
+function budActualSpent(b) {
+  const bCur = b.currency || "LYD";
+  let total = num(b.actual);
+  const name = String(b.name || "").trim().toLowerCase();
+  if (name) {
+    records().forEach(r => {
+      if ((r.kind || "expense") !== "expense") return;
+      if (String(r.category || "").trim().toLowerCase() !== name) return;
+      if ((r.currency || "LYD") === bCur) total += num(r.amount);
+      else if (bCur === "USD") total += usdOf(r);
+    });
+  }
+  return total;
+}
 
 function budgetsView() {
   if (budgetOpen) {
@@ -548,6 +565,7 @@ function budgetList() {
     const st = b.status || "pending";
     const stColor = st === "approved" ? "var(--st-complete)" : st === "denied" ? "var(--st-overdue,#ef4444)" : "var(--muted)";
     const estUsd = budEstUsd(b);
+    const actSpent = budActualSpent(b);
     const approveBtn = (canApprove() && st !== "approved") ? `<button class="btn btn--sm bud-approve" data-bid="${b.id}" style="background:var(--st-complete);color:#fff;border-color:var(--st-complete)">✓ ${esc(t("fin.bud.approve"))}</button>` : "";
     const denyBtn = (canApprove() && st !== "denied") ? `<button class="btn btn--sm bud-deny" data-bid="${b.id}" style="background:var(--st-overdue,#ef4444);color:#fff;border-color:var(--st-overdue,#ef4444)">✕ ${esc(t("fin.bud.deny"))}</button>` : "";
     return `<div class="card" style="margin-bottom:10px">
@@ -555,7 +573,7 @@ function budgetList() {
         <div style="flex:1;min-width:180px">
           <div style="font-weight:700;font-size:15px">${esc(b.name || "—")} <span class="badge" style="background:color-mix(in srgb,${stColor} 16%,transparent);color:${stColor};font-size:11px">${esc(t("fin.bud.status." + st))}</span></div>
           <div class="muted" style="font-size:12.5px;margin-top:2px">${b.planner ? "👤 " + esc(b.planner) : ""}</div>
-          <div class="muted" style="font-size:12.5px;margin-top:4px">${esc(t("fin.bud.assigned"))}: ${b.assigned ? money(b.assigned, b.currency) : "—"} · ${esc(t("fin.bud.actual"))}: ${b.actual ? money(b.actual, b.currency) : "—"}${estUsd ? ` · ${esc(t("fin.bud.estimated"))}: ${money(estUsd, "USD")}` : ""}</div>
+          <div class="muted" style="font-size:12.5px;margin-top:4px">${esc(t("fin.bud.assigned"))}: ${b.assigned ? money(b.assigned, b.currency) : "—"} · ${esc(t("fin.bud.actual"))}: ${actSpent ? money(actSpent, b.currency) : "—"}${estUsd ? ` · ${esc(t("fin.bud.estimated"))}: ${money(estUsd, "USD")}` : ""}</div>
           ${st === "denied" && b.denialNote ? `<div style="margin-top:6px;color:var(--st-overdue,#ef4444);font-size:12.5px">⚠ ${esc(t("fin.bud.changes"))}: ${esc(b.denialNote)}</div>` : ""}
         </div>
         <div class="flex" style="gap:6px;flex-wrap:wrap">
@@ -576,7 +594,7 @@ function budgetDetail(b) {
   const estUsd = budEstUsd(b);
   const byCcy = {}; costs.forEach(c => { const cc = c.currency || b.currency || "LYD"; byCcy[cc] = (byCcy[cc] || 0) + num(c.estimatedCost); });
   const estLines = Object.keys(byCcy).map(cc => money(byCcy[cc], cc)).join(" · ");
-  const assigned = num(b.assigned), actual = num(b.actual), remaining = assigned - actual;
+  const assigned = num(b.assigned), actual = budActualSpent(b), remaining = assigned - actual;
   const remColor = remaining >= 0 ? "var(--st-complete)" : "var(--st-overdue,#ef4444)";
   const stColor = st === "approved" ? "var(--st-complete)" : st === "denied" ? "var(--st-overdue,#ef4444)" : "var(--muted)";
   const header = `<div class="flex between" style="align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
