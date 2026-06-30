@@ -2,6 +2,6 @@
   <!-- lowercase "a": round bowl + stem (white via currentColor) -->
   <circle cx="85" cy="120" r="42" stroke="currentColor" stroke-width="22" fill="none" />
   <line x1="127" y1="78" x2="127" y2="162" stroke="currentColor" stroke-width="22" stroke-linecap="round" />
-  <!-- yellow dot inside the counter -->
-  <circle cx="85" cy="120" r="13" fill="#ffd400" />
+  <!-- dot inside the counter -->
+  <circle cx="85" cy="120" r="13" fill="currentColor" />
 </svg>
