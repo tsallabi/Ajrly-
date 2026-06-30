@@ -31,8 +31,7 @@ function persistSnapshot(db) {
       tasks: db.tasks, content: db.content, owners: db.owners, finance: db.finance,
       assetFolders: db.assetFolders, assets: db.assets, activity: db.activity,
       contentPosts: db.contentPosts, contentOpts: db.contentOpts, notebook: db.notebook,
-      collabs: db.collabs, budgets: db.budgets,
-      goals: db.goals, cityTargets: db.cityTargets, propertyTypes: db.propertyTypes,
+      collabs: db.collabs, budgets: db.budgets, cityTargets: db.cityTargets,
     }));
   } catch (_) { /* ignore quota/availability */ }
 }
@@ -83,9 +82,7 @@ export async function hydrateFromCloud(db) {
   if (Array.isArray(data.notebook)) replaceInPlace(db.notebook, mergeById(db.notebook, data.notebook));
   if (Array.isArray(data.collabs)) replaceInPlace(db.collabs, mergeById(db.collabs, data.collabs));
   if (Array.isArray(data.budgets)) replaceInPlace(db.budgets, mergeById(db.budgets, data.budgets));
-  if (Array.isArray(data.goals)) replaceInPlace(db.goals, mergeById(db.goals, data.goals));
   if (Array.isArray(data.cityTargets)) replaceInPlace(db.cityTargets, mergeById(db.cityTargets, data.cityTargets));
-  if (Array.isArray(data.propertyTypes)) replaceInPlace(db.propertyTypes, mergeById(db.propertyTypes, data.propertyTypes));
   persistSnapshot(db);
   return data;
 }
@@ -233,15 +230,6 @@ export function wireWriteThrough(db, onError) {
   });
   wrap("removeBudget", (id) => { cloud.removeBudget(id).catch(report); });
 
-  wrap("addGoal", (g) => {
-    const local = newest(db.goals);
-    cloud.createGoal(g).then((row) => mergeServerRow(db.goals, local && local.id, row)).catch(report);
-  });
-  wrap("updateGoal", (id, patch) => {
-    cloud.updateGoal(id, patch).then((row) => mergeServerRow(db.goals, id, row)).catch(report);
-  });
-  wrap("removeGoal", (id) => { cloud.removeGoal(id).catch(report); });
-
   wrap("addCityTarget", (c) => {
     const local = newest(db.cityTargets);
     cloud.createCityTarget(c).then((row) => mergeServerRow(db.cityTargets, local && local.id, row)).catch(report);
@@ -250,15 +238,6 @@ export function wireWriteThrough(db, onError) {
     cloud.updateCityTarget(id, patch).then((row) => mergeServerRow(db.cityTargets, id, row)).catch(report);
   });
   wrap("removeCityTarget", (id) => { cloud.removeCityTarget(id).catch(report); });
-
-  wrap("addPropertyType", (p) => {
-    const local = newest(db.propertyTypes);
-    cloud.createPropertyType(p).then((row) => mergeServerRow(db.propertyTypes, local && local.id, row)).catch(report);
-  });
-  wrap("updatePropertyType", (id, patch) => {
-    cloud.updatePropertyType(id, patch).then((row) => mergeServerRow(db.propertyTypes, id, row)).catch(report);
-  });
-  wrap("removePropertyType", (id) => { cloud.removePropertyType(id).catch(report); });
 
   try { Object.defineProperty(db, "__cloudWired", { value: true, enumerable: false }); } catch (_) {}
   return true;

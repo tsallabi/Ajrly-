@@ -1,23 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=78";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=79";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=78";
-import "./modules/goals.js?v=78";
-import "./modules/ownerContent.js?v=78";
-import "./modules/assets.js?v=78";
-import "./modules/account.js?v=78";
-import "./modules/team.js?v=78";
-import "./modules/performance.js?v=78";
+import "./modules/finance.js?v=79";
+import "./modules/ownerContent.js?v=79";
+import "./modules/assets.js?v=79";
+import "./modules/account.js?v=79";
+import "./modules/team.js?v=79";
+import "./modules/performance.js?v=79";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=78";
-import AjrlyPresence from "./presence.js?v=78"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=79";
+import AjrlyPresence from "./presence.js?v=79"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -181,6 +180,124 @@ window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal()
 /* ============================================================
    VIEW: Dashboard
    ============================================================ */
+/* ============================================================
+   Dashboard widget: Cities distribution (add a city → pie chart)
+   Backed by the synced `cityTargets` collection.
+   ============================================================ */
+registerStrings({
+  ar: {
+    "cities.title": "توزيع العقارات حسب المدينة",
+    "cities.add": "إضافة مدينة", "cities.edit": "تعديل المدينة",
+    "cities.empty": "لم تُضف مدن بعد — أضف أول مدينة لعرض المخطط",
+    "cities.name": "المدينة", "cities.count": "عدد العقارات", "cities.color": "اللون",
+    "cities.share": "النسبة", "cities.total": "إجمالي العقارات",
+  },
+  en: {
+    "cities.title": "Properties by city",
+    "cities.add": "Add city", "cities.edit": "Edit city",
+    "cities.empty": "No cities yet — add your first city to see the chart",
+    "cities.name": "City", "cities.count": "Properties", "cities.color": "Colour",
+    "cities.share": "Share", "cities.total": "Total properties",
+  },
+});
+
+const CITY_PALETTE = ["#1a5cff", "#16a34a", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#ef4444", "#84cc16", "#f97316", "#6366f1"];
+const LIBYAN_CITIES = ["Tripoli", "Benghazi", "Misrata", "Zawiya", "Al Bayda", "Khoms", "Zliten", "Sabha", "Tobruk", "Ajdabiya", "Sirte", "Derna", "Gharyan", "Sabratha", "Bani Walid", "Tarhuna", "Murzuq", "Ghadames"];
+const cityNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+function nextCityColor() {
+  const used = new Set((db.cityTargets || []).map(c => (c.color || "").toLowerCase()));
+  return CITY_PALETTE.find(c => !used.has(c.toLowerCase())) || CITY_PALETTE[(db.cityTargets || []).length % CITY_PALETTE.length];
+}
+
+/* generic pie chart from [{label,value,color}] */
+function pieSVG(slices) {
+  const total = slices.reduce((s, x) => s + x.value, 0);
+  const cx = 110, cy = 110, r = 100;
+  if (!total) {
+    return `<svg viewBox="0 0 220 220" width="220" height="220"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="4 4"/><text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="13" fill="var(--muted,#94a3b8)">0</text></svg>`;
+  }
+  const live = slices.filter(s => s.value > 0);
+  if (live.length === 1) {
+    const s = live[0];
+    return `<svg viewBox="0 0 220 220" width="220" height="220"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${esc(s.color)}"><title>${esc(s.label)}: 100%</title></circle></svg>`;
+  }
+  let acc = 0;
+  const paths = live.map(s => {
+    const a0 = acc / total * 2 * Math.PI; acc += s.value; const a1 = acc / total * 2 * Math.PI;
+    const x1 = cx + r * Math.sin(a0), y1 = cy - r * Math.cos(a0);
+    const x2 = cx + r * Math.sin(a1), y2 = cy - r * Math.cos(a1);
+    const large = (a1 - a0) > Math.PI ? 1 : 0;
+    const pct = Math.round(s.value / total * 100);
+    return `<path d="M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${esc(s.color)}" stroke="var(--surface,#fff)" stroke-width="1.5"><title>${esc(s.label)}: ${pct}%</title></path>`;
+  }).join("");
+  return `<svg viewBox="0 0 220 220" width="220" height="220" role="img" aria-label="${esc(t("cities.title"))}">${paths}</svg>`;
+}
+
+function citiesCard() {
+  const W = can("write");
+  const list = db.cityTargets || [];
+  const addBtn = W ? `<button class="btn btn--primary btn--sm" id="cityAdd">＋ ${esc(t("cities.add"))}</button>` : "";
+  if (!list.length) {
+    return `<div class="card">
+      <div class="card__head"><span class="card__title">🥧 ${esc(t("cities.title"))}</span>${addBtn}</div>
+      <div class="empty"><div class="empty__icon">🗺️</div><p class="muted">${esc(t("cities.empty"))}</p></div>
+    </div>`;
+  }
+  const slices = list.map((c, i) => ({ label: c.city || "—", value: cityNum(c.count), color: c.color || CITY_PALETTE[i % CITY_PALETTE.length] }));
+  const total = slices.reduce((s, x) => s + x.value, 0);
+  const legend = list.map((c, i) => {
+    const v = cityNum(c.count); const pct = total > 0 ? Math.round(v / total * 100) : 0;
+    const color = c.color || CITY_PALETTE[i % CITY_PALETTE.length];
+    return `<div class="flex between" style="gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div class="flex" style="gap:8px;align-items:center;min-width:0">
+        <span style="width:12px;height:12px;border-radius:3px;background:${esc(color)};flex:none"></span>
+        <span style="font-weight:600">${esc(c.city || "—")}</span>
+        <span class="muted" style="font-size:12px">· ${pct}%</span>
+      </div>
+      <div class="flex" style="gap:6px;align-items:center">
+        ${W ? `<input class="input" data-citycount="${c.id}" type="number" step="any" min="0" value="${esc(c.count ?? "0")}" style="width:84px;text-align:center" />`
+            : `<b style="font-variant-numeric:tabular-nums">${v.toLocaleString()}</b>`}
+        ${W ? `<button class="btn btn--ghost btn--sm" data-cityedit="${c.id}">✎</button>` : ""}
+        ${can("del") ? `<button class="btn btn--ghost btn--sm btn--danger" data-citydel="${c.id}">🗑</button>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+  return `<div class="grid cards-2">
+    <div class="card" style="display:flex;flex-direction:column;align-items:center;gap:8px">
+      <div class="card__head" style="width:100%"><span class="card__title">🥧 ${esc(t("cities.title"))}</span>${addBtn}</div>
+      ${pieSVG(slices)}
+      <div class="stat" style="text-align:center"><span class="stat__value">${total.toLocaleString()}</span><span class="stat__label">${esc(t("cities.total"))}</span></div>
+    </div>
+    <div class="card"><div class="card__title" style="margin-bottom:4px">${esc(t("cities.share"))}</div>${legend}</div>
+  </div>`;
+}
+
+function cityModal(rec) {
+  const x = rec || {}; const editing = !!rec;
+  const color = x.color || nextCityColor();
+  openModal(`
+    <div class="modal__head"><h3>🗺️ ${esc(t(editing ? "cities.edit" : "cities.add"))}</h3><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal__body">
+      <div class="field"><label>${esc(t("cities.name"))}</label>
+        <input id="city_name" list="city_list" autocomplete="off" value="${esc(x.city || "")}" />
+        <datalist id="city_list">${LIBYAN_CITIES.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist></div>
+      <div class="field-row">
+        <div class="field"><label>${esc(t("cities.count"))}</label><input id="city_count" type="number" step="any" min="0" value="${esc(x.count ?? "0")}" /></div>
+        <div class="field"><label>${esc(t("cities.color"))}</label><input id="city_color" type="color" value="${esc(color)}" style="height:38px;padding:2px" /></div>
+      </div>
+    </div>
+    <div class="modal__foot"><button class="btn" data-close>${esc(t("btn.cancel") || "Cancel")}</button><button class="btn btn--primary" data-save>${esc(t("btn.save") || "Save")}</button></div>`);
+  const saveBtn = $("[data-save]");
+  if (saveBtn) saveBtn.onclick = () => {
+    const city = $("#city_name").value.trim();
+    if (!city) { $("#city_name").focus(); return; }
+    const data = { city, count: $("#city_count").value, color: $("#city_color").value };
+    if (editing) db.updateCityTarget(rec.id, data); else db.addCityTarget(data);
+    closeModal(); render(); toast(t("toast.saved"));
+  };
+  $$("[data-close]").forEach(b => b.onclick = closeModal);
+}
+
 function viewDashboard() {
   const tasks = db.tasks;
   const total = tasks.length;
@@ -233,6 +350,8 @@ function viewDashboard() {
       </div>
     </div>
   </div>
+
+  <div style="margin-top:16px">${citiesCard()}</div>
 
   <div style="margin-top:16px">
     <div class="card">
@@ -1212,6 +1331,13 @@ function renderUserChip() {
 
 function bindViewEvents(r) {
   stopTimerTicker();
+  // Dashboard — cities distribution pie
+  if (r === "dashboard") {
+    $("#cityAdd") && ($("#cityAdd").onclick = () => cityModal(null));
+    $$("[data-cityedit]").forEach(b => b.onclick = () => cityModal(db.cityTargets.find(x => x.id === b.dataset.cityedit)));
+    $$("[data-citydel]").forEach(b => b.onclick = () => { if (confirm(t("confirm.delete"))) { db.removeCityTarget(b.dataset.citydel); render(); toast(t("toast.deleted")); } });
+    $$("[data-citycount]").forEach(inp => inp.onchange = () => { db.updateCityTarget(inp.dataset.citycount, { count: inp.value }); render(); });
+  }
   // Tasks
   if (r === "tasks") {
     $("#addTask") && ($("#addTask").onclick = () => taskModal(null));

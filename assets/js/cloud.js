@@ -130,9 +130,7 @@ export async function pull() {
     notebook: data.notebook,
     collabs: data.collabs,
     budgets: data.budgets,
-    goals: data.goals,
     cityTargets: data.cityTargets,
-    propertyTypes: data.propertyTypes,
     users: data.users || [],
     ts: data.ts || Date.now(),
   };
@@ -164,9 +162,7 @@ const _contentOpts = makeCrud("content-opts");
 const _notebook = makeCrud("notebook");
 const _collabs = makeCrud("collaborations");
 const _budgets = makeCrud("budgets");
-const _goals = makeCrud("goals");
 const _cityTargets = makeCrud("city-targets");
-const _propertyTypes = makeCrud("property-types");
 
 /* Tasks */
 export const createTask = (p) => _tasks.create(p);
@@ -212,18 +208,10 @@ export const removeCollab = (id) => _collabs.remove(id);
 export const createBudget = (p) => _budgets.create(p);
 export const updateBudget = (id, p) => _budgets.update(id, p);
 export const removeBudget = (id) => _budgets.remove(id);
-/* Goals & OKRs */
-export const createGoal = (p) => _goals.create(p);
-export const updateGoal = (id, p) => _goals.update(id, p);
-export const removeGoal = (id) => _goals.remove(id);
-/* City focus targets */
+/* Cities distribution buckets (dashboard pie) */
 export const createCityTarget = (p) => _cityTargets.create(p);
 export const updateCityTarget = (id, p) => _cityTargets.update(id, p);
 export const removeCityTarget = (id) => _cityTargets.remove(id);
-/* Property database composition buckets */
-export const createPropertyType = (p) => _propertyTypes.create(p);
-export const updatePropertyType = (id, p) => _propertyTypes.update(id, p);
-export const removePropertyType = (id) => _propertyTypes.remove(id);
 
 /* Clean default export for ergonomic importing. */
 const cloud = {
@@ -244,8 +232,6 @@ const cloud = {
   createNotebookPage, updateNotebookPage, removeNotebookPage,
   createCollab, updateCollab, removeCollab,
   createBudget, updateBudget, removeBudget,
-  createGoal, updateGoal, removeGoal,
   createCityTarget, updateCityTarget, removeCityTarget,
-  createPropertyType, updatePropertyType, removePropertyType,
 };
 export default cloud;

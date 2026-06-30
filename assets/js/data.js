@@ -52,14 +52,8 @@ const seedCollabs = [];
 /* ---- Seed: Budgets (campaign/dev budget planning with cost line-items) ---- */
 const seedBudgets = [];
 
-/* ---- Seed: Goals & OKRs (business plans), starts empty ---- */
-const seedGoals = [];
-
-/* ---- Seed: City focus targets (Supply-First, city-by-city), starts empty ---- */
+/* ---- Seed: Cities distribution buckets (dashboard pie chart), starts empty ---- */
 const seedCityTargets = [];
-
-/* ---- Seed: Property database composition buckets (pie chart), starts empty ---- */
-const seedPropertyTypes = [];
 
 /* ---- Static reference: Content pillars (from Pillar matrix) ---- */
 export const PILLARS = [
@@ -94,7 +88,7 @@ export const LINKS = [
 ];
 
 /* ---- Store ---- */
-const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets, activity: seedActivity, contentPosts: seedContentPosts, contentOpts: seedContentOpts, notebook: seedNotebook, collabs: seedCollabs, budgets: seedBudgets, goals: seedGoals, cityTargets: seedCityTargets, propertyTypes: seedPropertyTypes });
+const defaultState = () => ({ tasks: seedTasks, content: seedContent, owners: seedOwners, finance: seedFinance, assetFolders: seedAssetFolders, assets: seedAssets, activity: seedActivity, contentPosts: seedContentPosts, contentOpts: seedContentOpts, notebook: seedNotebook, collabs: seedCollabs, budgets: seedBudgets, cityTargets: seedCityTargets });
 
 let state = load();
 
@@ -215,20 +209,10 @@ export const db = {
   updateBudget(id, patch) { state.budgets = state.budgets.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
   removeBudget(id) { state.budgets = state.budgets.filter(x => x.id !== id); persist(); },
 
-  get goals() { return state.goals; },
-  addGoal(g) { state.goals.unshift({ ...g, id: uid("g") }); persist(); },
-  updateGoal(id, patch) { state.goals = state.goals.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
-  removeGoal(id) { state.goals = state.goals.filter(x => x.id !== id); persist(); },
-
   get cityTargets() { return state.cityTargets; },
   addCityTarget(c) { state.cityTargets.unshift({ ...c, id: uid("ct") }); persist(); },
   updateCityTarget(id, patch) { state.cityTargets = state.cityTargets.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
   removeCityTarget(id) { state.cityTargets = state.cityTargets.filter(x => x.id !== id); persist(); },
-
-  get propertyTypes() { return state.propertyTypes; },
-  addPropertyType(p) { state.propertyTypes.unshift({ ...p, id: uid("pt") }); persist(); },
-  updatePropertyType(id, patch) { state.propertyTypes = state.propertyTypes.map(x => x.id === id ? { ...x, ...patch } : x); persist(); },
-  removePropertyType(id) { state.propertyTypes = state.propertyTypes.filter(x => x.id !== id); persist(); },
 
   reset() { state = defaultState(); persist(); },
   exportJSON() { return JSON.stringify(state, null, 2); },
