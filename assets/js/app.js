@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=76";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=77";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=76";
-import "./modules/ownerContent.js?v=76";
-import "./modules/assets.js?v=76";
-import "./modules/account.js?v=76";
-import "./modules/team.js?v=76";
-import "./modules/performance.js?v=76";
+import "./modules/finance.js?v=77";
+import "./modules/ownerContent.js?v=77";
+import "./modules/assets.js?v=77";
+import "./modules/account.js?v=77";
+import "./modules/team.js?v=77";
+import "./modules/performance.js?v=77";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=76";
-import AjrlyPresence from "./presence.js?v=76"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=77";
+import AjrlyPresence from "./presence.js?v=77"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
