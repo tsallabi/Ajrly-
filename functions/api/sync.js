@@ -5,7 +5,7 @@
 import { json, unauthorized, serverError, noContent } from "../_lib/response.js";
 import { all } from "../_lib/db.js";
 import { getUser } from "../_lib/auth.js";
-import { listResource, TASKS, CONTENT, OWNERS, FINANCE, ASSET_FOLDERS, ASSETS, ACTIVITY, CONTENT_POSTS, CONTENT_OPTS, NOTEBOOK, COLLABS, BUDGETS, GOALS, CITY_TARGETS, PROPERTY_TYPES } from "../_lib/resource.js";
+import { listResource, TASKS, CONTENT, OWNERS, FINANCE, ASSET_FOLDERS, ASSETS, ACTIVITY, CONTENT_POSTS, CONTENT_OPTS, NOTEBOOK, COLLABS, BUDGETS, CITY_TARGETS } from "../_lib/resource.js";
 
 export function onRequestOptions() { return noContent(); }
 
@@ -39,9 +39,7 @@ export async function onRequestGet(context) {
       listResource(env, NOTEBOOK).then((r) => { out.notebook = r; }).catch(() => {}),
       listResource(env, COLLABS).then((r) => { out.collabs = r; }).catch(() => {}),
       listResource(env, BUDGETS).then((r) => { out.budgets = r; }).catch(() => {}),
-      listResource(env, GOALS).then((r) => { out.goals = r; }).catch(() => {}),
       listResource(env, CITY_TARGETS).then((r) => { out.cityTargets = r; }).catch(() => {}),
-      listResource(env, PROPERTY_TYPES).then((r) => { out.propertyTypes = r; }).catch(() => {}),
     ]);
 
     return json(out);
