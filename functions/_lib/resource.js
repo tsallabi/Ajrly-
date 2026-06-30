@@ -227,6 +227,48 @@ export const BUDGETS = {
   ],
 };
 
+export const GOALS = {
+  table: "goals",
+  prefix: "g",
+  order: "created_at DESC",
+  fields: [
+    { col: "title", key: "title" },
+    { col: "description", key: "description" },
+    { col: "type", key: "type" },                 // quantitative | qualitative
+    { col: "category", key: "category" },
+    { col: "owner", key: "owner" },
+    { col: "status", key: "status" },             // active | done | paused
+    { col: "progress", key: "progress" },         // manual % for qualitative goals
+    { col: "key_results", key: "keyResults", json: true }, // [{name,target,current,unit}]
+  ],
+};
+
+export const CITY_TARGETS = {
+  table: "city_targets",
+  prefix: "ct",
+  order: "created_at DESC",
+  fields: [
+    { col: "city", key: "city" },
+    { col: "priority", key: "priority" },         // primary | secondary | expansion
+    { col: "target_owners", key: "targetOwners" },
+    { col: "target_properties", key: "targetProperties" },
+    { col: "current_owners", key: "currentOwners" },
+    { col: "current_properties", key: "currentProperties" },
+    { col: "notes", key: "notes" },
+  ],
+};
+
+export const PROPERTY_TYPES = {
+  table: "property_types",
+  prefix: "pt",
+  order: "created_at ASC",
+  fields: [
+    { col: "type", key: "type" },                 // apartment | room | house | shop | office | …
+    { col: "count", key: "count" },
+    { col: "color", key: "color" },               // pie-slice colour
+  ],
+};
+
 export const COLLABS = {
   table: "collaborations",
   prefix: "cl",

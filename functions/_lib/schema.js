@@ -36,6 +36,12 @@ export const SCHEMA_STATEMENTS = [
   "CREATE TABLE IF NOT EXISTS collaborations (id TEXT PRIMARY KEY, company_name TEXT, company_location TEXT, owner_name TEXT, company_email TEXT, company_phone TEXT, owner_phone TEXT, details TEXT, replied INTEGER DEFAULT 0, stage TEXT DEFAULT 'contacted', offer_type TEXT, offer_amount TEXT, offer_unit TEXT, offer_valid_type TEXT, offer_valid_until TEXT, agreed_at TEXT, rejected_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
   // budgets (campaign/dev budgets + cost line-items as JSON)
   "CREATE TABLE IF NOT EXISTS budgets (id TEXT PRIMARY KEY, name TEXT, description TEXT, planner TEXT, status TEXT DEFAULT 'pending', denial_note TEXT, currency TEXT DEFAULT 'LYD', assigned TEXT, actual TEXT, costs TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  // goals & OKRs (business plans; key results as JSON)
+  "CREATE TABLE IF NOT EXISTS goals (id TEXT PRIMARY KEY, title TEXT, description TEXT, type TEXT DEFAULT 'quantitative', category TEXT, owner TEXT, status TEXT DEFAULT 'active', progress TEXT, key_results TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  // city focus targets (Supply-First, city-by-city)
+  "CREATE TABLE IF NOT EXISTS city_targets (id TEXT PRIMARY KEY, city TEXT, priority TEXT DEFAULT 'secondary', target_owners TEXT, target_properties TEXT, current_owners TEXT, current_properties TEXT, notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  // property database composition buckets (pie chart)
+  "CREATE TABLE IF NOT EXISTS property_types (id TEXT PRIMARY KEY, type TEXT, count TEXT, color TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
   // activity days (attendance)
   "CREATE TABLE IF NOT EXISTS activity_days (id TEXT PRIMARY KEY, user_id TEXT, user_name TEXT, day TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
   "CREATE INDEX IF NOT EXISTS idx_activity_user_day ON activity_days(user_id, day)",
