@@ -158,6 +158,45 @@ CREATE TABLE IF NOT EXISTS budgets (
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- ---- Goals & OKRs (business plans; key results as JSON) ----
+CREATE TABLE IF NOT EXISTS goals (
+  id           TEXT PRIMARY KEY,
+  title        TEXT,
+  description  TEXT,
+  type         TEXT DEFAULT 'quantitative',          -- quantitative|qualitative
+  category     TEXT,
+  owner        TEXT,
+  status       TEXT DEFAULT 'active',                 -- active|paused|done
+  progress     TEXT,                                  -- manual % for qualitative goals
+  key_results  TEXT,                                  -- JSON array [{name,target,current,unit}]
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---- City focus targets (Supply-First, city-by-city) ----
+CREATE TABLE IF NOT EXISTS city_targets (
+  id                 TEXT PRIMARY KEY,
+  city               TEXT,
+  priority           TEXT DEFAULT 'secondary',        -- primary|secondary|expansion
+  target_owners      TEXT,
+  target_properties  TEXT,
+  current_owners     TEXT,
+  current_properties TEXT,
+  notes              TEXT,
+  created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---- Property database composition buckets (pie chart) ----
+CREATE TABLE IF NOT EXISTS property_types (
+  id          TEXT PRIMARY KEY,
+  type        TEXT,                                   -- apartment|room|house|shop|office|…
+  count       TEXT,
+  color       TEXT,                                   -- pie-slice colour
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ---- Collaborations (company outreach pipeline) ----
 CREATE TABLE IF NOT EXISTS collaborations (
   id               TEXT PRIMARY KEY,
