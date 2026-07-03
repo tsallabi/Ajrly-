@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=79";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=80";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=79";
-import "./modules/ownerContent.js?v=79";
-import "./modules/assets.js?v=79";
-import "./modules/account.js?v=79";
-import "./modules/team.js?v=79";
-import "./modules/performance.js?v=79";
+import "./modules/finance.js?v=80";
+import "./modules/ownerContent.js?v=80";
+import "./modules/assets.js?v=80";
+import "./modules/account.js?v=80";
+import "./modules/team.js?v=80";
+import "./modules/performance.js?v=80";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=79";
-import AjrlyPresence from "./presence.js?v=79"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=80";
+import AjrlyPresence from "./presence.js?v=80"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -389,7 +389,7 @@ function statCard(icon, color, value, label) {
    ============================================================ */
 const TASK_TABS = ["all", "pending", "progress", "complete", "overdue", "closed"];
 const TASK_TAB_ICON = { all: "📋", pending: "🕒", progress: "🔄", complete: "✅", overdue: "⚠️", closed: "🔒" };
-let taskTab = "all";
+let taskTab = "pending";   // Tasks page opens on the Pending tab by default
 let taskMember = "";
 let timerTick = null;
 let bootDone = false;   // true once boot finishes — gates recurring-task rolling
