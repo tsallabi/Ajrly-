@@ -23,7 +23,7 @@ export const SCHEMA_STATEMENTS = [
   // content
   "CREATE TABLE IF NOT EXISTS content (id TEXT PRIMARY KEY, day TEXT, date TEXT, goal TEXT, platform TEXT, pillar TEXT, type TEXT, description TEXT, hook TEXT, caption TEXT, time TEXT, budget TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
   // owners
-  "CREATE TABLE IF NOT EXISTS owners (id TEXT PRIMARY KEY, name TEXT, gender TEXT, phone TEXT, email TEXT, city TEXT, listings TEXT, signed_up TEXT, last_contact TEXT, social TEXT, stage TEXT DEFAULT 'registered', priority INTEGER DEFAULT 0, community INTEGER DEFAULT 0, contact_log TEXT, notes TEXT, status TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS owners (id TEXT PRIMARY KEY, name TEXT, gender TEXT, phone TEXT, email TEXT, city TEXT, listings TEXT, signed_up TEXT, last_contact TEXT, social TEXT, registered_by TEXT, stage TEXT DEFAULT 'registered', priority INTEGER DEFAULT 0, community INTEGER DEFAULT 0, contact_log TEXT, notes TEXT, status TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
   // finance
   "CREATE TABLE IF NOT EXISTS finance (id TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'expense', name TEXT, date TEXT, amount TEXT, currency TEXT DEFAULT 'LYD', rate TEXT, category TEXT, paid_to TEXT, description TEXT, attachment TEXT, attachment_name TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
   "CREATE INDEX IF NOT EXISTS idx_finance_kind ON finance(kind, date)",
@@ -82,6 +82,7 @@ export const SCHEMA_ALTERS = [
   "ALTER TABLE owners ADD COLUMN social TEXT",
   "ALTER TABLE owners ADD COLUMN community INTEGER DEFAULT 0",
   "ALTER TABLE owners ADD COLUMN contact_log TEXT",
+  "ALTER TABLE owners ADD COLUMN registered_by TEXT",
   // finance — paid_to / rate added later
   "ALTER TABLE finance ADD COLUMN paid_to TEXT",
   "ALTER TABLE finance ADD COLUMN rate TEXT",
