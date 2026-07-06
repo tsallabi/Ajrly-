@@ -321,6 +321,7 @@ export const OWNERS = {
     { col: "signed_up", key: "signedUp" },
     { col: "last_contact", key: "lastContact" },
     { col: "social", key: "social" },
+    { col: "registered_by", key: "registeredBy" },
     { col: "stage", key: "stage" },
     { col: "priority", key: "priority" },
     { col: "community", key: "community" },

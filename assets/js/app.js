@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=80";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=81";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=80";
-import "./modules/ownerContent.js?v=80";
-import "./modules/assets.js?v=80";
-import "./modules/account.js?v=80";
-import "./modules/team.js?v=80";
-import "./modules/performance.js?v=80";
+import "./modules/finance.js?v=81";
+import "./modules/ownerContent.js?v=81";
+import "./modules/assets.js?v=81";
+import "./modules/account.js?v=81";
+import "./modules/team.js?v=81";
+import "./modules/performance.js?v=81";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=80";
-import AjrlyPresence from "./presence.js?v=80"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=81";
+import AjrlyPresence from "./presence.js?v=81"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -113,6 +113,9 @@ registerStrings({
     "contact.whatsapp": "واتساب", "contact.phone": "اتصال", "contact.email": "بريد",
     "owner.toPotential": "تحويل إلى محتمل", "owner.toRegistered": "تحويل إلى مسجّل", "owner.converted": "تم التحويل",
     "field.social": "رابط التواصل الاجتماعي", "field.socialPh": "رابط أو @معرّف على وسائل التواصل",
+    "field.registeredBy": "سجّله / تواصل معه", "th.registeredBy": "المسؤول",
+    "owner.regByAll": "كل المسؤولين", "owner.regByNone": "غير محدد",
+    "owner.regByCount": "التسجيلات حسب المسؤول",
   },
   en: {
     "stage.registered": "Registered", "stage.contacted": "Contacted",
@@ -137,6 +140,9 @@ registerStrings({
     "contact.whatsapp": "WhatsApp", "contact.phone": "Call", "contact.email": "Email",
     "owner.toPotential": "Convert to potential", "owner.toRegistered": "Convert to registered", "owner.converted": "Converted",
     "field.social": "Social media link", "field.socialPh": "Profile URL or @handle",
+    "field.registeredBy": "Registered / contacted by", "th.registeredBy": "Registered by",
+    "owner.regByAll": "All staff", "owner.regByNone": "Unassigned",
+    "owner.regByCount": "Registrations by person",
   },
 });
 
@@ -823,6 +829,7 @@ const OWNER_TABS = ["registered", "contacted", "pending", "potential", "tasks"];
 const CONTACT_CYCLE = 14; // days between contacts
 const CONTACT_METHODS = ["whatsapp", "phone", "email"];
 let ownerTab = "registered";
+let ownerRegBy = "";   // "Registered by" filter ("" = all, "__none__" = unassigned)
 
 const ownerType = (o) => (o.stage === "potential" ? "potential" : "registered");
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -862,21 +869,43 @@ function viewOwners() {
   const tabs = `<div class="seg" id="ownerTabs">
     ${OWNER_TABS.map(s => `<button data-otab="${s}" class="${ownerTab === s ? "active" : ""}">${STAGE_ICON[s]} ${esc(t("stage." + s))} <span class="kcol__count">${counts[s]}</span></button>`).join("")}
   </div>`;
+  // "Registered by" filter — names actually present on owners
+  const regByNames = [...new Set(owners.map(o => o.registeredBy).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const regFilter = (ownerTab === "tasks" || !regByNames.length) ? "" :
+    `<select class="input" id="ownerRegFilter" style="max-width:180px">
+       <option value="">${t("owner.regByAll")}</option>
+       ${regByNames.map(n => `<option value="${esc(n)}" ${ownerRegBy === n ? "selected" : ""}>${esc(n)}</option>`).join("")}
+       <option value="__none__" ${ownerRegBy === "__none__" ? "selected" : ""}>${t("owner.regByNone")}</option>
+     </select>`;
   const rightActions = ownerTab === "tasks"
     ? (W() ? `<button class="btn btn--primary" id="addOwnerTask">＋ ${t("owner.createTask")}</button>` : "")
-    : `<button class="btn btn--sm" id="ownerTpl" title="${t("owner.tpl")}">⬇ ${t("owner.tpl")}</button>
+    : `${regFilter}
+       <button class="btn btn--sm" id="ownerTpl" title="${t("owner.tpl")}">⬇ ${t("owner.tpl")}</button>
        <button class="btn btn--sm" id="ownerXlsx">⬆ ${t("owner.bulk")}</button>
        ${W() ? `<button class="btn btn--primary" id="addOwner">＋ ${t("btn.newOwner")}</button>` : ""}
        <input type="file" id="ownerFile" accept=".csv,.xlsx,.xls" hidden />`;
-  const toolbar = `<div class="toolbar"><div class="toolbar__left">${tabs}</div><div class="toolbar__right">${rightActions}</div></div>`;
+  const toolbar = `<div class="toolbar"><div class="toolbar__left">${tabs}</div><div class="toolbar__right" style="gap:8px;align-items:center">${rightActions}</div></div>`;
 
   if (ownerTab === "tasks") return toolbar + ownerTasksView();
 
+  // per-person registration counts (registered owners), shown on the Registered tab
+  let summary = "";
+  if (ownerTab === "registered") {
+    const byPerson = {};
+    owners.filter(o => ownerType(o) === "registered").forEach(o => { const k = o.registeredBy || ""; byPerson[k] = (byPerson[k] || 0) + 1; });
+    const keys = Object.keys(byPerson).sort((a, b) => byPerson[b] - byPerson[a]);
+    if (keys.length) {
+      const chips = keys.map(k => `<span style="background:var(--brand-soft);color:var(--brand);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600">${esc(k || t("owner.regByNone"))}: ${byPerson[k]}</span>`).join("");
+      summary = `<div class="card" style="margin-bottom:12px"><div class="muted" style="font-weight:600;margin-bottom:8px">👥 ${t("owner.regByCount")}</div><div class="flex" style="gap:8px;flex-wrap:wrap">${chips}</div></div>`;
+    }
+  }
+
   let list = owners.filter(o => ownerInTab(o, ownerTab));
+  if (ownerRegBy) list = list.filter(o => ownerRegBy === "__none__" ? !o.registeredBy : (o.registeredBy || "") === ownerRegBy);
   list = list.sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || daysSinceContact(b) - daysSinceContact(a));
 
   if (!list.length) {
-    return toolbar + `<div class="card"><div class="empty">
+    return toolbar + summary + `<div class="card"><div class="empty">
       <div class="empty__icon">${STAGE_ICON[ownerTab]}</div>
       <h3>${t("empty.owners")}</h3><p class="muted">${t("empty.owners.sub")}</p>
     </div></div>`;
@@ -893,6 +922,7 @@ function viewOwners() {
         <a href="#" class="cell-title owner-open" data-oprofile="${o.id}" style="color:var(--brand)">${esc(o.name || "—")}</a>${community}
       </span></td>
       <td>${esc(o.phone || "—")}</td><td>${esc(o.city || "—")}</td>
+      <td>${o.registeredBy ? esc(o.registeredBy) : "—"}</td>
       <td>${o.lastContact ? fmtDate(o.lastContact) : "—"}</td><td>${dueTxt}</td>
       <td style="text-align:center"><input type="checkbox" class="owner-contacted" data-ocontact="${o.id}" ${checked} title="${t("owner.markContacted")}" style="width:18px;height:18px;cursor:pointer" /></td>
       <td><div class="row-actions">
@@ -904,9 +934,9 @@ function viewOwners() {
     </tr>`;
   }).join("");
 
-  return toolbar + `<div class="table-wrap"><table>
+  return toolbar + summary + `<div class="table-wrap"><table>
     <thead><tr>
-      <th>${t("th.owner")}</th><th>${t("th.phone")}</th><th>${t("th.city")}</th>
+      <th>${t("th.owner")}</th><th>${t("th.phone")}</th><th>${t("th.city")}</th><th>${t("th.registeredBy")}</th>
       <th>${t("th.lastContact")}</th><th>${t("owner.since")}</th><th style="text-align:center">${t("owner.contacted")}</th><th></th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -978,6 +1008,7 @@ function ownerProfile(owner) {
       ${info(t("field.signedUp"), o.signedUp ? fmtDate(o.signedUp) : "")}
       ${info(t("field.lastContact"), o.lastContact ? fmtDate(o.lastContact) : "")}
       ${info(t("field.social"), o.social ? `<a href="${esc(socialURL(o.social))}" target="_blank" rel="noopener">${esc(o.social)}</a>` : "")}
+      ${info(t("th.registeredBy"), esc(o.registeredBy))}
       ${info(t("th.stage"), t("stage." + ownerType(o)))}
       ${o.notes ? `<div style="margin-top:10px"><span class="muted">${t("field.notes")}</span><div>${esc(o.notes)}</div></div>` : ""}
       <div class="section-title" style="margin:18px 0 10px;font-size:15px">🗒️ ${t("owner.log")}</div>
@@ -1058,6 +1089,10 @@ function ownerModal(owner) {
         <div class="field"><label>${t("field.lastContact")}</label><input type="date" id="o_last" value="${esc(x.lastContact || "")}" /></div>
         <div class="field"><label>${t("field.social")}</label><input id="o_social" placeholder="${t("field.socialPh")}" value="${esc(x.social || "")}" /></div>
       </div>
+      <div class="field"><label>${t("field.registeredBy")}</label>
+        <input id="o_regby" list="o_regby_list" autocomplete="off" value="${esc(editing ? (x.registeredBy || "") : ((activeUser() && activeUser().name) || ""))}" />
+        <datalist id="o_regby_list">${team().map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist>
+      </div>
       <label class="flex" style="gap:8px;cursor:pointer;margin:2px 0"><input type="checkbox" id="o_community" ${x.community ? "checked" : ""} style="width:17px;height:17px" /> 👥 ${t("owner.community")}</label>
       <div class="field"><label>${t("field.notes")}</label><textarea id="o_notes">${esc(x.notes || "")}</textarea></div>
     </div>
@@ -1073,6 +1108,7 @@ function ownerModal(owner) {
       city: $("#o_city").value.trim(), listings: $("#o_listings").value,
       signedUp: $("#o_signed").value, lastContact: $("#o_last").value,
       social: $("#o_social").value.trim(),
+      registeredBy: $("#o_regby").value.trim(),
       community: $("#o_community").checked,
       notes: $("#o_notes").value.trim(), stage: $("#o_stage").value, status: "pending",
     };
@@ -1085,9 +1121,9 @@ function ownerModal(owner) {
 }
 
 /* ---- Excel/CSV bulk add + template ---- */
-const OWNER_TPL_HEADERS = ["Name", "Gender(male/female)", "Phone", "Email", "City", "Listings", "SignedUp(YYYY-MM-DD)", "LastContact(YYYY-MM-DD)", "Type(registered/potential)", "Notes"];
+const OWNER_TPL_HEADERS = ["Name", "Gender(male/female)", "Phone", "Email", "City", "Listings", "SignedUp(YYYY-MM-DD)", "LastContact(YYYY-MM-DD)", "Type(registered/potential)", "RegisteredBy(employee)", "Notes"];
 function downloadOwnerTemplate() {
-  const sample = ["Mohammed Ali", "male", "+218911234567", "m.ali@example.ly", "Tripoli", "3", "2026-06-01", "2026-06-20", "registered", "Owns 3 apartments"];
+  const sample = ["Mohammed Ali", "male", "+218911234567", "m.ali@example.ly", "Tripoli", "3", "2026-06-01", "2026-06-20", "registered", "Kenda", "Owns 3 apartments"];
   const csv = "﻿" + OWNER_TPL_HEADERS.join(",") + "\n" + sample.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",") + "\n";
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
@@ -1127,7 +1163,7 @@ async function ownerBulkAdd(file) {
   const idx = (k) => header.findIndex(h => h.includes(k));
   const iName = idx("name"), iGen = idx("gender"), iPhone = idx("phone"), iEmail = idx("email"),
     iCity = idx("city"), iList = idx("listing"), iSigned = idx("signed"), iLast = idx("contact"),
-    iType = idx("type"), iNotes = idx("note");
+    iType = idx("type"), iRegBy = idx("registeredby"), iNotes = idx("note");
   const existing = new Set(db.owners.map(o => (o.phone || "") + "|" + (o.email || "")));
   let added = 0;
   for (let r = 1; r < rows.length; r++) {
@@ -1139,7 +1175,7 @@ async function ownerBulkAdd(file) {
     db.addOwner({
       name, gender: get(iGen).toLowerCase().startsWith("f") ? "female" : (get(iGen) ? "male" : ""),
       phone, email, city: get(iCity), listings: get(iList), signedUp: get(iSigned),
-      lastContact: get(iLast), notes: get(iNotes), stage: typ, status: "pending", contactLog: [], priority: false,
+      lastContact: get(iLast), registeredBy: get(iRegBy), notes: get(iNotes), stage: typ, status: "pending", contactLog: [], priority: false,
     });
     existing.add(phone + "|" + email); added++;
   }
@@ -1358,6 +1394,7 @@ function bindViewEvents(r) {
   // Owners
   if (r === "owners") {
     $$("[data-otab]").forEach(b => b.onclick = () => { ownerTab = b.dataset.otab; render(); });
+    $("#ownerRegFilter") && ($("#ownerRegFilter").onchange = (e) => { ownerRegBy = e.target.value; render(); });
     $("#addOwner") && ($("#addOwner").onclick = () => ownerModal(null));
     $$("[data-oedit]").forEach(b => b.onclick = () => ownerModal(db.owners.find(x => x.id === b.dataset.oedit)));
     $$("[data-odel]").forEach(b => b.onclick = () => { if (confirm(t("confirm.delete"))) { db.removeOwner(b.dataset.odel); render(); toast(t("toast.deleted")); } });
