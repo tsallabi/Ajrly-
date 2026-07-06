@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=82";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=83";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=82";
-import "./modules/ownerContent.js?v=82";
-import "./modules/assets.js?v=82";
-import "./modules/account.js?v=82";
-import "./modules/team.js?v=82";
-import "./modules/performance.js?v=82";
+import "./modules/finance.js?v=83";
+import "./modules/ownerContent.js?v=83";
+import "./modules/assets.js?v=83";
+import "./modules/account.js?v=83";
+import "./modules/team.js?v=83";
+import "./modules/performance.js?v=83";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=82";
-import AjrlyPresence from "./presence.js?v=82"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=83";
+import AjrlyPresence from "./presence.js?v=83"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -116,6 +116,10 @@ registerStrings({
     "field.registeredBy": "سجّله / تواصل معه", "th.registeredBy": "المسؤول",
     "owner.regByAll": "كل المسؤولين", "owner.regByNone": "غير محدد",
     "owner.regByCount": "التسجيلات حسب المسؤول",
+    "owner.search": "ابحث بالاسم أو الهاتف أو البريد…",
+    "owner.searchFound": "{n} نتيجة في المنظومة",
+    "owner.searchNone": "لا يوجد — هذا الرقم غير مسجّل في المنظومة",
+    "owner.searchClear": "مسح البحث",
   },
   en: {
     "stage.registered": "Registered", "stage.contacted": "Contacted",
@@ -143,6 +147,10 @@ registerStrings({
     "field.registeredBy": "Registered / contacted by", "th.registeredBy": "Registered by",
     "owner.regByAll": "All staff", "owner.regByNone": "Unassigned",
     "owner.regByCount": "Registrations by person",
+    "owner.search": "Search by name, phone, or email…",
+    "owner.searchFound": "{n} found in the system",
+    "owner.searchNone": "No match — this number isn't in the system",
+    "owner.searchClear": "Clear search",
   },
 });
 
@@ -830,6 +838,7 @@ const CONTACT_CYCLE = 14; // days between contacts
 const CONTACT_METHODS = ["whatsapp", "phone", "email"];
 let ownerTab = "registered";
 let ownerRegBy = "";   // "Registered by" filter ("" = all, "__none__" = unassigned)
+let ownerSearch = "";  // owners search query (name / phone / email — across all stages)
 
 const ownerType = (o) => (o.stage === "potential" ? "potential" : "registered");
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -888,6 +897,22 @@ function viewOwners() {
 
   if (ownerTab === "tasks") return toolbar + ownerTasksView();
 
+  // ---- search (name / phone / email) across ALL stages ----
+  const q = ownerSearch.trim();
+  const searching = !!q;
+  const qLower = q.toLowerCase();
+  const qDigits = q.replace(/\D/g, "");
+  const matchOwner = (o) => {
+    if ((o.name || "").toLowerCase().includes(qLower)) return true;
+    if ((o.email || "").toLowerCase().includes(qLower)) return true;
+    if (qDigits && (o.phone || "").replace(/\D/g, "").includes(qDigits)) return true;
+    return false;
+  };
+  const searchBar = `<div class="toolbar" style="margin-bottom:10px"><div class="toolbar__left" style="flex:1;gap:8px;align-items:center">
+    <input class="input" id="ownerSearch" placeholder="${t("owner.search")}" value="${esc(ownerSearch)}" style="max-width:440px;width:100%" />
+    ${searching ? `<button class="btn btn--ghost btn--sm" id="ownerSearchClear">✕ ${t("owner.searchClear")}</button>` : ""}
+  </div></div>`;
+
   // per-person registration counts (registered owners), shown on the Registered tab
   let summary = "";
   if (ownerTab === "registered") {
@@ -900,14 +925,17 @@ function viewOwners() {
     }
   }
 
-  let list = owners.filter(o => ownerInTab(o, ownerTab));
+  // when searching, look across ALL stages so any number can be found; otherwise
+  // filter to the current tab.
+  let list = owners.filter(o => searching ? matchOwner(o) : ownerInTab(o, ownerTab));
   if (ownerRegBy) list = list.filter(o => ownerRegBy === "__none__" ? !o.registeredBy : (o.registeredBy || "") === ownerRegBy);
   list = list.sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || daysSinceContact(b) - daysSinceContact(a));
 
   if (!list.length) {
-    return toolbar + summary + `<div class="card"><div class="empty">
-      <div class="empty__icon">${STAGE_ICON[ownerTab]}</div>
-      <h3>${t("empty.owners")}</h3><p class="muted">${t("empty.owners.sub")}</p>
+    return toolbar + searchBar + (searching ? "" : summary) + `<div class="card"><div class="empty">
+      <div class="empty__icon">${searching ? "🔎" : STAGE_ICON[ownerTab]}</div>
+      <h3>${searching ? t("owner.searchNone") : t("empty.owners")}</h3>
+      ${searching ? "" : `<p class="muted">${t("empty.owners.sub")}</p>`}
     </div></div>`;
   }
 
@@ -919,7 +947,7 @@ function viewOwners() {
     return `<tr>
       <td><span class="flex" style="gap:8px;align-items:center">
         <button class="btn btn--ghost btn--sm owner-star" data-ostar="${o.id}" title="${t("owner.priority")}" style="padding:2px 4px">${o.priority ? "⭐" : "☆"}</button>
-        <a href="#" class="cell-title owner-open" data-oprofile="${o.id}" style="color:var(--brand)">${esc(o.name || "—")}</a>${community}
+        <a href="#" class="cell-title owner-open" data-oprofile="${o.id}" style="color:var(--brand)">${esc(o.name || "—")}</a>${community}${searching ? ` <span class="tag" style="background:var(--surface-2);color:var(--muted);border-color:transparent">${STAGE_ICON[ownerType(o)]} ${t("stage." + ownerType(o))}</span>` : ""}
       </span></td>
       <td>${esc(o.phone || "—")}</td><td>${esc(o.city || "—")}</td>
       <td>${o.registeredBy ? esc(o.registeredBy) : "—"}</td>
@@ -934,7 +962,8 @@ function viewOwners() {
     </tr>`;
   }).join("");
 
-  return toolbar + summary + `<div class="table-wrap"><table>
+  const foundBanner = searching ? `<div class="muted" style="margin:0 2px 10px;font-weight:600">🔎 ${t("owner.searchFound").replace("{n}", list.length)}</div>` : "";
+  return toolbar + searchBar + foundBanner + (searching ? "" : summary) + `<div class="table-wrap"><table>
     <thead><tr>
       <th>${t("th.owner")}</th><th>${t("th.phone")}</th><th>${t("th.city")}</th><th>${t("th.registeredBy")}</th>
       <th>${t("th.lastContact")}</th><th>${t("owner.since")}</th><th style="text-align:center">${t("owner.contacted")}</th><th></th>
@@ -1402,6 +1431,12 @@ function bindViewEvents(r) {
   if (r === "owners") {
     $$("[data-otab]").forEach(b => b.onclick = () => { ownerTab = b.dataset.otab; render(); });
     $("#ownerRegFilter") && ($("#ownerRegFilter").onchange = (e) => { ownerRegBy = e.target.value; render(); });
+    const oSearch = $("#ownerSearch");
+    if (oSearch) {
+      oSearch.oninput = (e) => { ownerSearch = e.target.value; render(); };
+      if (ownerSearch) { oSearch.focus(); const v = oSearch.value; oSearch.value = ""; oSearch.value = v; } // keep focus + caret at end across re-render
+    }
+    $("#ownerSearchClear") && ($("#ownerSearchClear").onclick = () => { ownerSearch = ""; render(); });
     $("#addOwner") && ($("#addOwner").onclick = () => ownerModal(null));
     $$("[data-oedit]").forEach(b => b.onclick = () => ownerModal(db.owners.find(x => x.id === b.dataset.oedit)));
     $$("[data-odel]").forEach(b => b.onclick = () => { if (confirm(t("confirm.delete"))) { db.removeOwner(b.dataset.odel); render(); toast(t("toast.deleted")); } });
