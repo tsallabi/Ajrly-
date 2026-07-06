@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=81";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=82";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=81";
-import "./modules/ownerContent.js?v=81";
-import "./modules/assets.js?v=81";
-import "./modules/account.js?v=81";
-import "./modules/team.js?v=81";
-import "./modules/performance.js?v=81";
+import "./modules/finance.js?v=82";
+import "./modules/ownerContent.js?v=82";
+import "./modules/assets.js?v=82";
+import "./modules/account.js?v=82";
+import "./modules/team.js?v=82";
+import "./modules/performance.js?v=82";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=81";
-import AjrlyPresence from "./presence.js?v=81"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=82";
+import AjrlyPresence from "./presence.js?v=82"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -1090,8 +1090,15 @@ function ownerModal(owner) {
         <div class="field"><label>${t("field.social")}</label><input id="o_social" placeholder="${t("field.socialPh")}" value="${esc(x.social || "")}" /></div>
       </div>
       <div class="field"><label>${t("field.registeredBy")}</label>
-        <input id="o_regby" list="o_regby_list" autocomplete="off" value="${esc(editing ? (x.registeredBy || "") : ((activeUser() && activeUser().name) || ""))}" />
-        <datalist id="o_regby_list">${team().map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist>
+        <select id="o_regby">
+          <option value="">—</option>
+          ${(() => {
+            const cur = editing ? (x.registeredBy || "") : ((activeUser() && activeUser().name) || "");
+            const names = [...team()];
+            if (cur && !names.includes(cur)) names.push(cur); // keep a custom/imported value selectable
+            return names.map(n => `<option value="${esc(n)}" ${cur === n ? "selected" : ""}>${esc(n)}</option>`).join("");
+          })()}
+        </select>
       </div>
       <label class="flex" style="gap:8px;cursor:pointer;margin:2px 0"><input type="checkbox" id="o_community" ${x.community ? "checked" : ""} style="width:17px;height:17px" /> 👥 ${t("owner.community")}</label>
       <div class="field"><label>${t("field.notes")}</label><textarea id="o_notes">${esc(x.notes || "")}</textarea></div>
