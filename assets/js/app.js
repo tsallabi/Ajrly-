@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=83";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=84";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=83";
-import "./modules/ownerContent.js?v=83";
-import "./modules/assets.js?v=83";
-import "./modules/account.js?v=83";
-import "./modules/team.js?v=83";
-import "./modules/performance.js?v=83";
+import "./modules/finance.js?v=84";
+import "./modules/ownerContent.js?v=84";
+import "./modules/assets.js?v=84";
+import "./modules/account.js?v=84";
+import "./modules/team.js?v=84";
+import "./modules/performance.js?v=84";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=83";
-import AjrlyPresence from "./presence.js?v=83"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=84";
+import AjrlyPresence from "./presence.js?v=84"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -1087,10 +1087,33 @@ function logContactModal(owner) {
   $$("[data-close]").forEach(b => b.onclick = closeModal);
 }
 
+/* Phone country codes (Libya first = default). Value is the dial code. */
+const PHONE_CODES = [
+  { c: "+218", f: "🇱🇾" }, { c: "+216", f: "🇹🇳" }, { c: "+20", f: "🇪🇬" }, { c: "+213", f: "🇩🇿" },
+  { c: "+212", f: "🇲🇦" }, { c: "+971", f: "🇦🇪" }, { c: "+966", f: "🇸🇦" }, { c: "+974", f: "🇶🇦" },
+  { c: "+965", f: "🇰🇼" }, { c: "+973", f: "🇧🇭" }, { c: "+968", f: "🇴🇲" }, { c: "+962", f: "🇯🇴" },
+  { c: "+961", f: "🇱🇧" }, { c: "+964", f: "🇮🇶" }, { c: "+963", f: "🇸🇾" }, { c: "+970", f: "🇵🇸" },
+  { c: "+249", f: "🇸🇩" }, { c: "+90", f: "🇹🇷" }, { c: "+1", f: "🇺🇸" }, { c: "+44", f: "🇬🇧" },
+  { c: "+33", f: "🇫🇷" }, { c: "+49", f: "🇩🇪" }, { c: "+39", f: "🇮🇹" },
+];
+/* Split a stored phone into { code, num }. A leading known dial code is
+   extracted; a bare local number defaults to Libya; an unknown +code is kept
+   whole with no separate code (the "—" option). */
+function splitPhone(phone) {
+  const p = String(phone || "").trim();
+  if (p.startsWith("+")) {
+    const codes = PHONE_CODES.map(x => x.c).sort((a, b) => b.length - a.length);
+    for (const code of codes) if (p.startsWith(code)) return { code, num: p.slice(code.length).trim() };
+    return { code: "", num: p };
+  }
+  return { code: p ? "+218" : "+218", num: p };
+}
+
 function ownerModal(owner) {
   const x = owner || {};
   const editing = !!owner;
   const types = ["registered", "potential"];
+  const sp = splitPhone(x.phone || "");
   openModal(`
     <div class="modal__head"><h3>${editing ? t("modal.editOwner") : t("modal.newOwner")}</h3><button class="icon-btn" data-close>✕</button></div>
     <div class="modal__body">
@@ -1103,7 +1126,15 @@ function ownerModal(owner) {
         </select></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>${t("field.phone")}</label><input id="o_phone" value="${esc(x.phone || "")}" /></div>
+        <div class="field"><label>${t("field.phone")}</label>
+          <div class="flex" style="gap:6px;align-items:stretch">
+            <select id="o_code" style="max-width:104px;flex:none">
+              ${PHONE_CODES.map(pc => `<option value="${pc.c}" ${sp.code === pc.c ? "selected" : ""}>${pc.f} ${pc.c}</option>`).join("")}
+              <option value="" ${sp.code === "" ? "selected" : ""}>—</option>
+            </select>
+            <input id="o_phone" value="${esc(sp.num)}" placeholder="945001040" style="flex:1;min-width:0" />
+          </div>
+        </div>
         <div class="field"><label>${t("field.email")}</label><input id="o_email" value="${esc(x.email || "")}" /></div>
       </div>
       <div class="field-row">
@@ -1140,7 +1171,8 @@ function ownerModal(owner) {
   ($("[data-save]") || {}).onclick = () => {
     const data = {
       name: $("#o_name").value.trim(), gender: $("#o_gender").value,
-      phone: $("#o_phone").value.trim(), email: $("#o_email").value.trim(),
+      phone: (() => { const code = $("#o_code").value, num = $("#o_phone").value.trim(); return num ? (code ? code + " " + num : num) : ""; })(),
+      email: $("#o_email").value.trim(),
       city: $("#o_city").value.trim(), listings: $("#o_listings").value,
       signedUp: $("#o_signed").value, lastContact: $("#o_last").value,
       social: $("#o_social").value.trim(),
