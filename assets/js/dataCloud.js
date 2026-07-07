@@ -121,10 +121,15 @@ export function wireWriteThrough(db, onError) {
     db[name] = (...args) => { const r = orig(...args); try { fn(...args); } catch (e) { report(e); } return r; };
   };
 
-  /* Creates: data.js assigns a local uid then unshift/push. After the
-     local add, send to cloud and replace the local row with the server
-     row (the just-added item is the newest). */
-  const newest = (arr) => arr[0] || arr[arr.length - 1];
+  /* Creates: data.js assigns a local uid then unshift/push. After the local
+     add, send to cloud and replace the local row with the server row.
+     `newest` is for stores that UNSHIFT (new item at index 0). Stores that
+     PUSH (owners, content — and notebook) must instead take the LAST element,
+     otherwise the server id/fields get merged onto the wrong row and the new
+     record never links to its server copy (causing dup rows / fields reverting
+     on the next hydrate). */
+  const newest = (arr) => arr[0];
+  const lastAdded = (arr) => arr[arr.length - 1];
 
   wrap("addTask", (t) => {
     const local = db.tasks[0]; // addTask unshifts
@@ -136,7 +141,7 @@ export function wireWriteThrough(db, onError) {
   wrap("removeTask", (id) => { cloud.removeTask(id).catch(report); });
 
   wrap("addContent", (c) => {
-    const local = newest(db.content);
+    const local = lastAdded(db.content); // addContent pushes
     cloud.createContent(c).then((row) => mergeServerRow(db.content, local && local.id, row)).catch(report);
   });
   wrap("updateContent", (id, patch) => {
@@ -145,7 +150,7 @@ export function wireWriteThrough(db, onError) {
   wrap("removeContent", (id) => { cloud.removeContent(id).catch(report); });
 
   wrap("addOwner", (o) => {
-    const local = newest(db.owners);
+    const local = lastAdded(db.owners); // addOwner pushes
     cloud.createOwner(o).then((row) => mergeServerRow(db.owners, local && local.id, row)).catch(report);
   });
   wrap("updateOwner", (id, patch) => {
