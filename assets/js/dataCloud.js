@@ -63,40 +63,44 @@ function mergeById(local, server) {
      • purely-local owners (no server match) are kept.
    Result: local edits stick even if the write-through hasn't reached the
    backend, and duplicates disappear. */
+const _emptyVal = (v) => v === "" || v == null || (Array.isArray(v) && v.length === 0);
+const _skipOverlay = new Set(["id", "createdAt", "updatedAt"]);
+/* Key by the last 9 digits of the phone (ignores country code / leading zero,
+   so "0925039422" and "+218 0925039422" match); fall back to the name. */
 function ownerDedupeKey(o) {
-  const ph = String((o && o.phone) || "").replace(/\D/g, "");
-  if (ph) return "p:" + ph;
+  const digits = String((o && o.phone) || "").replace(/\D/g, "");
+  if (digits) return "p:" + (digits.length > 9 ? digits.slice(-9) : digits);
   const nm = String((o && o.name) || "").trim().toLowerCase();
   return nm ? "n:" + nm : null;
 }
-const _emptyVal = (v) => v === "" || v == null || (Array.isArray(v) && v.length === 0);
-const _skipOverlay = new Set(["id", "createdAt", "updatedAt"]);
+/* Combine b's non-empty fields into a (a wins where both are filled). */
+function overlayNonEmpty(a, b) {
+  for (const k in b) { if (_skipOverlay.has(k)) continue; if (!_emptyVal(b[k]) && _emptyVal(a[k])) a[k] = b[k]; }
+  return a;
+}
 function reconcileOwners(local, server) {
   if (!Array.isArray(server)) return Array.isArray(local) ? local.slice() : [];
+  // Merge ALL local rows that share a key into one, so a City on any duplicate
+  // copy is captured (the old bug left orphan local copies without it).
   const localByKey = new Map();
-  for (const o of (local || [])) { const k = ownerDedupeKey(o); if (k && !localByKey.has(k)) localByKey.set(k, o); }
-  const out = []; const seen = new Set(); const usedLocal = new Set();
+  for (const o of (local || [])) {
+    const k = ownerDedupeKey(o); if (!k) continue;
+    if (!localByKey.has(k)) localByKey.set(k, { ...o });
+    else overlayNonEmpty(localByKey.get(k), o);
+  }
+  const out = []; const seen = new Set();
   for (const s of server) {
     if (!s || !s.id) continue;
     const k = ownerDedupeKey(s);
     if (k) { if (seen.has(k)) continue; seen.add(k); } // collapse orphaned server dups
     const loc = k ? localByKey.get(k) : null;
-    if (loc) {
-      usedLocal.add(loc);
-      const merged = { ...s };
-      for (const kk in loc) { // fill blanks the server doesn't have with local values
-        if (_skipOverlay.has(kk)) continue;
-        if (!_emptyVal(loc[kk]) && _emptyVal(s[kk])) merged[kk] = loc[kk];
-      }
-      out.push(merged);
-    } else out.push(s);
+    out.push(loc ? overlayNonEmpty({ ...s }, loc) : s); // fill server blanks from local
   }
-  for (const o of (local || [])) { // keep purely-local (unsynced) owners
-    if (usedLocal.has(o) || !o || !o.id) continue;
+  for (const o of (local || [])) { // keep purely-local (unsynced) owners, de-duped
+    if (!o || !o.id) continue;
     const k = ownerDedupeKey(o);
-    if (k && seen.has(k)) continue;
-    if (k) seen.add(k);
-    out.push(o);
+    if (k) { if (seen.has(k)) continue; seen.add(k); out.push(localByKey.get(k)); }
+    else out.push(o);
   }
   return out;
 }
