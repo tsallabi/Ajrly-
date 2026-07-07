@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=94";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=95";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=94";
-import "./modules/ownerContent.js?v=94";
-import "./modules/assets.js?v=94";
-import "./modules/account.js?v=94";
-import "./modules/team.js?v=94";
-import "./modules/performance.js?v=94";
+import "./modules/finance.js?v=95";
+import "./modules/ownerContent.js?v=95";
+import "./modules/assets.js?v=95";
+import "./modules/account.js?v=95";
+import "./modules/team.js?v=95";
+import "./modules/performance.js?v=95";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=94";
-import AjrlyPresence from "./presence.js?v=94"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=95";
+import AjrlyPresence from "./presence.js?v=95"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -94,6 +94,7 @@ registerStrings({
     "stage.registered": "مالك مسجّل", "stage.contacted": "تم التواصل",
     "stage.pending": "بانتظار التواصل", "stage.potential": "مالك محتمل",
     "field.gender": "الجنس", "field.city": "المدينة", "field.cityPh": "اختر أو اكتب مدينة…", "field.signedUp": "تاريخ التسجيل",
+    "owner.phoneDup": "⚠ هذا الرقم مسجّل بالفعل لـ «{name}»", "owner.phoneDupToast": "رقم مكرر — لم يتم الحفظ",
     "th.city": "المدينة", "th.signedUp": "تاريخ التسجيل",
     "gender.male": "ذكر", "gender.female": "أنثى",
     "owner.tpl": "قالب Excel", "owner.bulk": "إضافة سريعة (Excel)",
@@ -125,6 +126,7 @@ registerStrings({
     "stage.registered": "Registered", "stage.contacted": "Contacted",
     "stage.pending": "Pending contact", "stage.potential": "Potential",
     "field.gender": "Gender", "field.city": "City", "field.cityPh": "Pick or type a city…", "field.signedUp": "Signed up",
+    "owner.phoneDup": "⚠ This number already belongs to “{name}”", "owner.phoneDupToast": "Duplicate number — not saved",
     "th.city": "City", "th.signedUp": "Signed up",
     "gender.male": "Male", "gender.female": "Female",
     "owner.tpl": "Excel template", "owner.bulk": "Excel quick add",
@@ -1141,6 +1143,16 @@ function splitPhone(phone) {
   return { code: p ? "+218" : "+218", num: p };
 }
 
+/* Normalise a phone to its last 9 digits (ignores country code / leading zero /
+   formatting) so "0925039422" and "+218 0925039422" compare equal. */
+const phoneKey9 = (s) => { const d = String(s || "").replace(/\D/g, ""); return d.length > 9 ? d.slice(-9) : d; };
+/* Find another owner (not `excludeId`) that already has this phone number. */
+function ownerPhoneDuplicate(rawNum, excludeId) {
+  const k = phoneKey9(rawNum);
+  if (!k) return null;
+  return db.owners.find(o => o && o.id !== excludeId && phoneKey9(o.phone) === k) || null;
+}
+
 function ownerModal(owner) {
   const x = owner || {};
   const editing = !!owner;
@@ -1166,6 +1178,7 @@ function ownerModal(owner) {
             </select>
             <input id="o_phone" value="${esc(sp.num)}" placeholder="945001040" style="flex:1;min-width:0" />
           </div>
+          <div id="o_phone_warn" style="display:none;color:var(--st-overdue,#ef4444);font-size:12px;margin-top:5px;font-weight:600"></div>
         </div>
         <div class="field"><label>${t("field.email")}</label><input id="o_email" value="${esc(x.email || "")}" /></div>
       </div>
@@ -1203,6 +1216,17 @@ function ownerModal(owner) {
       <button class="btn" data-close>${t("btn.cancel")}</button>
       ${W() ? `<button class="btn btn--primary" data-save>${t("btn.save")}</button>` : ""}
     </div>`);
+  // live "already exists" check on the phone number (blocks duplicate owners)
+  const checkPhoneDup = () => {
+    const warn = $("#o_phone_warn"); if (!warn) return null;
+    const dup = ownerPhoneDuplicate($("#o_phone") ? $("#o_phone").value : "", editing ? owner.id : null);
+    if (dup) { warn.style.display = "block"; warn.textContent = t("owner.phoneDup").replace("{name}", dup.name || dup.phone || "—"); }
+    else { warn.style.display = "none"; warn.textContent = ""; }
+    return dup;
+  };
+  const pn = $("#o_phone"); if (pn) pn.oninput = checkPhoneDup;
+  const pc = $("#o_code"); if (pc) pc.onchange = checkPhoneDup;
+  checkPhoneDup();
   ($("[data-save]") || {}).onclick = () => {
     const data = {
       name: $("#o_name").value.trim(), gender: $("#o_gender").value,
@@ -1216,6 +1240,8 @@ function ownerModal(owner) {
       notes: $("#o_notes").value.trim(), stage: $("#o_stage").value, status: "pending",
     };
     if (!data.name) { $("#o_name").focus(); return; }
+    // block a duplicate phone number (a different owner already has it)
+    if (checkPhoneDup()) { $("#o_phone").focus(); toast(t("owner.phoneDupToast")); return; }
     if (editing) db.updateOwner(owner.id, data); else { data.contactLog = []; data.priority = false; db.addOwner(data); }
     closeModal(); render(); toast(t("toast.saved"));
   };
