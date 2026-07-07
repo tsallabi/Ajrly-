@@ -121,6 +121,16 @@ export function wireWriteThrough(db, onError) {
     db[name] = (...args) => { const r = orig(...args); try { fn(...args); } catch (e) { report(e); } return r; };
   };
 
+  /* Self-heal: if an update targets a row the server doesn't have (a stale/
+     local id left over from an earlier mis-link), recreate it there from the
+     full local record and relink the id — so edits (city, stage, …) actually
+     persist instead of being wiped on the next hydrate. */
+  const notFound = (e) => e && (e.status === 404 || e.code === "notfound" || e.code === "http_404");
+  const recreateOnServer = (createFn, arr, id) => {
+    const full = findById(arr, id);
+    if (full) createFn(full).then((created) => mergeServerRow(arr, id, created)).catch(report);
+  };
+
   /* Creates: data.js assigns a local uid then unshift/push. After the local
      add, send to cloud and replace the local row with the server row.
      `newest` is for stores that UNSHIFT (new item at index 0). Stores that
@@ -154,7 +164,9 @@ export function wireWriteThrough(db, onError) {
     cloud.createOwner(o).then((row) => mergeServerRow(db.owners, local && local.id, row)).catch(report);
   });
   wrap("updateOwner", (id, patch) => {
-    cloud.updateOwner(id, patch).then((row) => mergeServerRow(db.owners, id, row)).catch(report);
+    cloud.updateOwner(id, patch)
+      .then((row) => { if (row) mergeServerRow(db.owners, id, row); else recreateOnServer(cloud.createOwner, db.owners, id); })
+      .catch((e) => { if (notFound(e)) recreateOnServer(cloud.createOwner, db.owners, id); else report(e); });
   });
   wrap("removeOwner", (id) => { cloud.removeOwner(id).catch(report); });
 
