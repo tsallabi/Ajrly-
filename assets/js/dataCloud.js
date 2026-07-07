@@ -51,34 +51,52 @@ function mergeById(local, server) {
   return [...localOnly, ...server]; // local-only (newest, unsynced) on top
 }
 
-/* Collapse duplicate OWNER rows that represent the same person. An earlier
-   sync bug (bulk import under a mis-linking write-through) could leave
-   orphaned server copies of the same owner under different ids; on refresh a
-   stale copy (e.g. without a City that was later added) could resurface and
-   hide the good one. Key by phone digits (or name when there's no phone) and
-   keep the most complete row, so edits are never buried behind a duplicate.
-   Owners with neither phone nor name are left untouched (not dedupable). */
+/* Reconcile OWNERS by a stable natural key (phone digits, or name when there's
+   no phone) instead of by id. The earlier bulk-import sync bug scrambled owner
+   ids between local and server, so id-keyed merges kept losing edits and
+   leaving duplicates. Here:
+     • server rows are de-duplicated by key (orphaned copies collapse), and
+     • for a matched pair, the server value wins for every field it actually
+       has, but any field the user filled LOCALLY that the server left blank
+       (e.g. a City that hasn't synced yet) is preserved — so a filled field is
+       never blanked on refresh.
+     • purely-local owners (no server match) are kept.
+   Result: local edits stick even if the write-through hasn't reached the
+   backend, and duplicates disappear. */
 function ownerDedupeKey(o) {
   const ph = String((o && o.phone) || "").replace(/\D/g, "");
   if (ph) return "p:" + ph;
   const nm = String((o && o.name) || "").trim().toLowerCase();
   return nm ? "n:" + nm : null;
 }
-function ownerFieldScore(o) {
-  let n = 0;
-  for (const k in o) { const v = o[k]; if (v !== "" && v != null && !(Array.isArray(v) && !v.length)) n++; }
-  return n;
-}
-function dedupeOwners(list) {
-  const at = new Map(); const out = [];
-  for (const o of list) {
-    if (!o || !o.id) continue;
+const _emptyVal = (v) => v === "" || v == null || (Array.isArray(v) && v.length === 0);
+const _skipOverlay = new Set(["id", "createdAt", "updatedAt"]);
+function reconcileOwners(local, server) {
+  if (!Array.isArray(server)) return Array.isArray(local) ? local.slice() : [];
+  const localByKey = new Map();
+  for (const o of (local || [])) { const k = ownerDedupeKey(o); if (k && !localByKey.has(k)) localByKey.set(k, o); }
+  const out = []; const seen = new Set(); const usedLocal = new Set();
+  for (const s of server) {
+    if (!s || !s.id) continue;
+    const k = ownerDedupeKey(s);
+    if (k) { if (seen.has(k)) continue; seen.add(k); } // collapse orphaned server dups
+    const loc = k ? localByKey.get(k) : null;
+    if (loc) {
+      usedLocal.add(loc);
+      const merged = { ...s };
+      for (const kk in loc) { // fill blanks the server doesn't have with local values
+        if (_skipOverlay.has(kk)) continue;
+        if (!_emptyVal(loc[kk]) && _emptyVal(s[kk])) merged[kk] = loc[kk];
+      }
+      out.push(merged);
+    } else out.push(s);
+  }
+  for (const o of (local || [])) { // keep purely-local (unsynced) owners
+    if (usedLocal.has(o) || !o || !o.id) continue;
     const k = ownerDedupeKey(o);
-    if (!k) { out.push(o); continue; }
-    if (!at.has(k)) { at.set(k, out.length); out.push(o); continue; }
-    const i = at.get(k); const cur = out[i];
-    const so = ownerFieldScore(o), sc = ownerFieldScore(cur);
-    out[i] = so > sc ? o : so < sc ? cur : (String(o.updatedAt || "") >= String(cur.updatedAt || "") ? o : cur);
+    if (k && seen.has(k)) continue;
+    if (k) seen.add(k);
+    out.push(o);
   }
   return out;
 }
@@ -102,7 +120,7 @@ export async function hydrateFromCloud(db) {
     if (tk.timerBy === undefined && s.timerBy !== undefined) tk.timerBy = s.timerBy;
   });
   replaceInPlace(db.content, mergeById(db.content, data.content));
-  replaceInPlace(db.owners, dedupeOwners(mergeById(db.owners, data.owners)));
+  replaceInPlace(db.owners, reconcileOwners(db.owners, data.owners));
   // optional tables: only merge when the server actually sent them, so a
   // missing/not-yet-migrated table never wipes the local copy on refresh.
   if (Array.isArray(data.finance)) replaceInPlace(db.finance, mergeById(db.finance, data.finance));
