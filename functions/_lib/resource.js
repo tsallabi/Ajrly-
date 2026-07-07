@@ -23,6 +23,10 @@ export function toClient(cfg, row) {
     // entirely so the client keeps its local value instead of having it wiped.
     if (!(f.col in row)) continue;
     let v = row[f.col];
+    // Boolean columns: return a real boolean. Legacy rows may hold the string
+    // "false"/"true" (a bug where String(false) was stored) — "false" is a
+    // TRUTHY string in JS, so map it explicitly instead of passing it through.
+    if (f.bool) { out[f.key] = (v === 1 || v === "1" || v === true || v === "true"); continue; }
     if (f.json) {
       if (typeof v === "string") {
         try { v = JSON.parse(v); } catch (_) { v = v ? [v] : []; }
@@ -40,6 +44,7 @@ export function toClient(cfg, row) {
 /* Pick a DB-ready value from a client body for a field. */
 function dbValue(f, body) {
   let v = body[f.key];
+  if (f.bool) return (v === true || v === 1 || v === "1" || v === "true") ? 1 : 0; // store 1/0, never "false"
   if (f.json) return JSON.stringify(Array.isArray(v) ? v : (v == null ? [] : [v]));
   if (v === undefined || v === null) return null;
   return typeof v === "string" ? v : String(v);
@@ -251,7 +256,7 @@ export const COLLABS = {
     { col: "company_phone", key: "companyPhone" },
     { col: "owner_phone", key: "ownerPhone" },
     { col: "details", key: "details" },
-    { col: "replied", key: "replied" },
+    { col: "replied", key: "replied", bool: true },
     { col: "stage", key: "stage" },                 // contacted|pending|agreed|rejected
     { col: "offer_type", key: "offerType" },
     { col: "offer_amount", key: "offerAmount" },
@@ -323,8 +328,8 @@ export const OWNERS = {
     { col: "social", key: "social" },
     { col: "registered_by", key: "registeredBy" },
     { col: "stage", key: "stage" },
-    { col: "priority", key: "priority" },
-    { col: "community", key: "community" },
+    { col: "priority", key: "priority", bool: true },
+    { col: "community", key: "community", bool: true },
     { col: "contact_log", key: "contactLog", json: true },
     { col: "notes", key: "notes" },
     { col: "status", key: "status" },
