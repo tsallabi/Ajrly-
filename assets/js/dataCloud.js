@@ -158,7 +158,14 @@ export function wireWriteThrough(db, onError) {
       // still references the temporary local id — re-render so edit/delete/
       // timer buttons point at the authoritative id.
       const idChanged = row.id && row.id !== it.id;
-      Object.assign(it, row);
+      // Merge field-by-field: the server row wins, EXCEPT never overwrite a
+      // value the user filled locally with an EMPTY server value. Otherwise a
+      // field the backend didn't echo back / didn't persist (e.g. City) would
+      // be wiped off the local copy the instant the write-through responds.
+      for (const k in row) {
+        if (k !== "id" && _emptyVal(row[k]) && !_emptyVal(it[k])) continue;
+        it[k] = row[k];
+      }
       persistSnapshot(db);
       if (idChanged) rerender();
     } else {
