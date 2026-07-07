@@ -125,6 +125,9 @@ export async function hydrateFromCloud(db) {
   });
   replaceInPlace(db.content, mergeById(db.content, data.content));
   replaceInPlace(db.owners, reconcileOwners(db.owners, data.owners));
+  // re-apply the sync-proof local owner overrides (City, etc.) so a value the
+  // backend dropped is restored on this device after every hydrate.
+  try { if (db.applyOwnerOverrides) db.applyOwnerOverrides(); } catch (_) {}
   // optional tables: only merge when the server actually sent them, so a
   // missing/not-yet-migrated table never wipes the local copy on refresh.
   if (Array.isArray(data.finance)) replaceInPlace(db.finance, mergeById(db.finance, data.finance));
