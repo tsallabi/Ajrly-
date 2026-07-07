@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=85";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=86";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=85";
-import "./modules/ownerContent.js?v=85";
-import "./modules/assets.js?v=85";
-import "./modules/account.js?v=85";
-import "./modules/team.js?v=85";
-import "./modules/performance.js?v=85";
+import "./modules/finance.js?v=86";
+import "./modules/ownerContent.js?v=86";
+import "./modules/assets.js?v=86";
+import "./modules/account.js?v=86";
+import "./modules/team.js?v=86";
+import "./modules/performance.js?v=86";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=85";
-import AjrlyPresence from "./presence.js?v=85"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=86";
+import AjrlyPresence from "./presence.js?v=86"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -1143,7 +1143,7 @@ function ownerModal(owner) {
       </div>
       <div class="field-row">
         <div class="field"><label>${t("field.signedUp")}</label><input type="date" id="o_signed" value="${esc(x.signedUp || "")}" /></div>
-        <div class="field"><label>${t("owner.type")}</label><select id="o_stage">${types.map(s => `<option value="${s}" ${(x.stage === "potential" ? "potential" : "registered") === s ? "selected" : ""}>${t("stage." + s)}</option>`).join("")}</select></div>
+        <div class="field"><label>${t("owner.type")}</label><select id="o_stage">${(() => { const defStage = editing ? (x.stage === "potential" ? "potential" : "registered") : "potential"; return types.map(s => `<option value="${s}" ${defStage === s ? "selected" : ""}>${t("stage." + s)}</option>`).join(""); })()}</select></div>
       </div>
       <div class="field-row">
         <div class="field"><label>${t("field.lastContact")}</label><input type="date" id="o_last" value="${esc(x.lastContact || "")}" /></div>
@@ -1153,7 +1153,7 @@ function ownerModal(owner) {
         <select id="o_regby">
           <option value="">—</option>
           ${(() => {
-            const cur = editing ? (x.registeredBy || "") : ((activeUser() && activeUser().name) || "");
+            const cur = editing ? (x.registeredBy || "") : ""; // new owners default to no one selected
             const names = [...team()];
             if (cur && !names.includes(cur)) names.push(cur); // keep a custom/imported value selectable
             return names.map(n => `<option value="${esc(n)}" ${cur === n ? "selected" : ""}>${esc(n)}</option>`).join("");
