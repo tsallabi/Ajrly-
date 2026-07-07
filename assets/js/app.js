@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=91";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=92";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=91";
-import "./modules/ownerContent.js?v=91";
-import "./modules/assets.js?v=91";
-import "./modules/account.js?v=91";
-import "./modules/team.js?v=91";
-import "./modules/performance.js?v=91";
+import "./modules/finance.js?v=92";
+import "./modules/ownerContent.js?v=92";
+import "./modules/assets.js?v=92";
+import "./modules/account.js?v=92";
+import "./modules/team.js?v=92";
+import "./modules/performance.js?v=92";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=91";
-import AjrlyPresence from "./presence.js?v=91"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=92";
+import AjrlyPresence from "./presence.js?v=92"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -93,7 +93,7 @@ registerStrings({
   ar: {
     "stage.registered": "مالك مسجّل", "stage.contacted": "تم التواصل",
     "stage.pending": "بانتظار التواصل", "stage.potential": "مالك محتمل",
-    "field.gender": "الجنس", "field.city": "المدينة", "field.signedUp": "تاريخ التسجيل",
+    "field.gender": "الجنس", "field.city": "المدينة", "field.cityPh": "اختر أو اكتب مدينة…", "field.signedUp": "تاريخ التسجيل",
     "th.city": "المدينة", "th.signedUp": "تاريخ التسجيل",
     "gender.male": "ذكر", "gender.female": "أنثى",
     "owner.tpl": "قالب Excel", "owner.bulk": "إضافة سريعة (Excel)",
@@ -124,7 +124,7 @@ registerStrings({
   en: {
     "stage.registered": "Registered", "stage.contacted": "Contacted",
     "stage.pending": "Pending contact", "stage.potential": "Potential",
-    "field.gender": "Gender", "field.city": "City", "field.signedUp": "Signed up",
+    "field.gender": "Gender", "field.city": "City", "field.cityPh": "Pick or type a city…", "field.signedUp": "Signed up",
     "th.city": "City", "th.signedUp": "Signed up",
     "gender.male": "Male", "gender.female": "Female",
     "owner.tpl": "Excel template", "owner.bulk": "Excel quick add",
@@ -217,6 +217,9 @@ registerStrings({
 
 const CITY_PALETTE = ["#1a5cff", "#16a34a", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#ef4444", "#84cc16", "#f97316", "#6366f1"];
 const LIBYAN_CITIES = ["Tripoli", "Benghazi", "Misrata", "Zawiya", "Al Bayda", "Khoms", "Zliten", "Sabha", "Tobruk", "Ajdabiya", "Sirte", "Derna", "Gharyan", "Sabratha", "Bani Walid", "Tarhuna", "Murzuq", "Ghadames"];
+const LIBYAN_CITIES_AR = ["طرابلس", "بنغازي", "مصراتة", "الزاوية", "البيضاء", "الخمس", "زليتن", "سبها", "طبرق", "أجدابيا", "سرت", "درنة", "غريان", "صبراتة", "بني وليد", "ترهونة", "مرزق", "غدامس", "المرج", "زوارة", "يفرن", "نالوت", "الكفرة", "أوباري", "غات", "ودان", "هون", "براك", "مسلاتة", "القره بوللي", "تاجوراء"];
+/* Localised Libyan-city suggestions for the owner form's city picker. */
+const cityOptions = () => (getLang() === "ar" ? LIBYAN_CITIES_AR : LIBYAN_CITIES);
 const cityNum = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 function nextCityColor() {
   const used = new Set((db.cityTargets || []).map(c => (c.color || "").toLowerCase()));
@@ -1138,7 +1141,10 @@ function ownerModal(owner) {
         <div class="field"><label>${t("field.email")}</label><input id="o_email" value="${esc(x.email || "")}" /></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>${t("field.city")}</label><input id="o_city" value="${esc(x.city || "")}" /></div>
+        <div class="field"><label>${t("field.city")}</label>
+          <input id="o_city" list="o_city_list" autocomplete="off" value="${esc(x.city || "")}" placeholder="${t("field.cityPh")}" />
+          <datalist id="o_city_list">${cityOptions().map(c => `<option value="${esc(c)}"></option>`).join("")}</datalist>
+        </div>
         <div class="field"><label>${t("field.listings")}</label><input type="number" id="o_listings" value="${esc(x.listings || "")}" /></div>
       </div>
       <div class="field-row">
