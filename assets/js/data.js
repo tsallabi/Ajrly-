@@ -100,6 +100,38 @@ function load() {
   return defaultState();
 }
 
+/* ---- Owner field overrides (sync-proof local safety net) ----
+   User-entered owner fields (City, etc.) are mirrored into a SEPARATE
+   localStorage key that the cloud sync never reads or writes, keyed by phone
+   (or name). They are re-applied after every load/hydrate so a value the
+   backend drops can't vanish from this device. Booleans/enums (stage,
+   community, priority) are intentionally excluded — those follow the server. */
+const OWNER_OVR_KEY = "ajrly_owner_overrides";
+const OVR_FIELDS = ["city", "social", "notes", "listings", "email", "signedUp", "lastContact", "registeredBy", "gender"];
+function ownerOvrKey(o) {
+  const d = String((o && o.phone) || "").replace(/\D/g, "");
+  if (d) return "p:" + (d.length > 9 ? d.slice(-9) : d);
+  const n = String((o && o.name) || "").trim().toLowerCase();
+  return n ? "n:" + n : null;
+}
+function readOwnerOvr() { try { const r = JSON.parse(localStorage.getItem(OWNER_OVR_KEY) || "{}"); return (r && typeof r === "object") ? r : {}; } catch (_) { return {}; } }
+function writeOwnerOvr(all) { try { localStorage.setItem(OWNER_OVR_KEY, JSON.stringify(all)); } catch (_) {} }
+function saveOwnerOvr(o) {
+  const k = ownerOvrKey(o); if (!k) return;
+  const all = readOwnerOvr(); const cur = all[k] || {};
+  OVR_FIELDS.forEach((f) => { if (o[f] !== undefined && o[f] !== "" && o[f] != null) cur[f] = o[f]; });
+  all[k] = cur; writeOwnerOvr(all);
+}
+function applyOwnerOvr() {
+  const all = readOwnerOvr();
+  (state.owners || []).forEach((o) => {
+    const k = ownerOvrKey(o); const ov = k && all[k]; if (!ov) return;
+    OVR_FIELDS.forEach((f) => { const v = ov[f]; const empty = v === "" || v == null || (Array.isArray(v) && !v.length); const cur = o[f]; const curEmpty = cur === "" || cur == null; if (!empty && curEmpty) o[f] = v; });
+  });
+}
+
+applyOwnerOvr(); // re-apply saved owner fields onto the freshly-loaded state
+
 let _lastAutoBackup = 0;
 function persist() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
@@ -162,8 +194,9 @@ export const db = {
   updateContent(id, patch) { state.content = state.content.map(c => c.id === id ? { ...c, ...patch } : c); persist(); },
   removeContent(id) { state.content = state.content.filter(c => c.id !== id); persist(); },
 
-  addOwner(o) { state.owners.push({ ...o, id: uid("o") }); persist(); },
-  updateOwner(id, patch) { state.owners = state.owners.map(o => o.id === id ? { ...o, ...patch } : o); persist(); },
+  addOwner(o) { const n = { ...o, id: uid("o") }; state.owners.push(n); persist(); saveOwnerOvr(n); },
+  updateOwner(id, patch) { state.owners = state.owners.map(o => o.id === id ? { ...o, ...patch } : o); persist(); const u = state.owners.find(o => o.id === id); if (u) saveOwnerOvr(u); },
+  applyOwnerOverrides() { applyOwnerOvr(); },
   removeOwner(id) { state.owners = state.owners.filter(o => o.id !== id); persist(); },
 
   get finance() { return state.finance; },
