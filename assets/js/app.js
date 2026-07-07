@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=92";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=93";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=92";
-import "./modules/ownerContent.js?v=92";
-import "./modules/assets.js?v=92";
-import "./modules/account.js?v=92";
-import "./modules/team.js?v=92";
-import "./modules/performance.js?v=92";
+import "./modules/finance.js?v=93";
+import "./modules/ownerContent.js?v=93";
+import "./modules/assets.js?v=93";
+import "./modules/account.js?v=93";
+import "./modules/team.js?v=93";
+import "./modules/performance.js?v=93";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=92";
-import AjrlyPresence from "./presence.js?v=92"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=93";
+import AjrlyPresence from "./presence.js?v=93"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -868,6 +868,34 @@ function ownerInTab(o, tab) {
 
 const ownerTasks = () => db.tasks.filter(x => x.ownerId);
 
+/* Temporary diagnostic: dump the local vs cloud record for the owner(s)
+   matching the search box, so we can see where a field (e.g. City) is lost. */
+async function diagnoseOwner() {
+  const q = ((typeof ownerSearch === "string" && ownerSearch.trim()) || (window.prompt && prompt("Owner name or phone to diagnose:")) || "").trim();
+  if (!q) return;
+  const qd = q.replace(/\D/g, "");
+  const match = (o) => (String(o.name || "").includes(q)) || (qd && String(o.phone || "").replace(/\D/g, "").includes(qd));
+  const localMatches = (db.owners || []).filter(match);
+  let cloudOn = false, serverMatches = [], err = "";
+  try {
+    cloudOn = !!(cloud && cloud.isCloud && cloud.isCloud());
+    if (cloudOn && cloud.pull) { const data = await cloud.pull(); serverMatches = (data.owners || []).filter(match); }
+  } catch (e) { err = String((e && e.message) || e); }
+  const pick = (o) => ({ id: o.id, name: o.name, phone: o.phone, city: o.city, stage: o.stage, community: o.community, registeredBy: o.registeredBy, updatedAt: o.updatedAt });
+  const fmt = (arr) => arr.length ? arr.map(o => JSON.stringify(pick(o), null, 1)).join("\n\n") : "(none)";
+  openModal(`
+    <div class="modal__head"><h3>🐞 Owner diagnostic — "${esc(q)}"</h3><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal__body" style="font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;max-height:68vh;overflow:auto;line-height:1.5">Cloud on: ${cloudOn}${err ? "\nERROR: " + esc(err) : ""}
+
+━━ LOCAL (${localMatches.length}) ━━
+${esc(fmt(localMatches))}
+
+━━ CLOUD (${serverMatches.length}) ━━
+${esc(fmt(serverMatches))}</div>
+    <div class="modal__foot"><button class="btn btn--primary" data-close>${t("btn.close") || "Close"}</button></div>`);
+  $$("[data-close]").forEach(b => b.onclick = closeModal);
+}
+
 function viewOwners() {
   const owners = db.owners;
   const counts = {};
@@ -892,6 +920,7 @@ function viewOwners() {
   const rightActions = ownerTab === "tasks"
     ? (W() ? `<button class="btn btn--primary" id="addOwnerTask">＋ ${t("owner.createTask")}</button>` : "")
     : `${regFilter}
+       <button class="btn btn--sm" id="ownerDiag" title="Diagnose">🐞</button>
        <button class="btn btn--sm" id="ownerTpl" title="${t("owner.tpl")}">⬇ ${t("owner.tpl")}</button>
        <button class="btn btn--sm" id="ownerXlsx">⬆ ${t("owner.bulk")}</button>
        ${W() ? `<button class="btn btn--primary" id="addOwner">＋ ${t("btn.newOwner")}</button>` : ""}
@@ -1469,6 +1498,7 @@ function bindViewEvents(r) {
   if (r === "owners") {
     $$("[data-otab]").forEach(b => b.onclick = () => { ownerTab = b.dataset.otab; render(); });
     $("#ownerRegFilter") && ($("#ownerRegFilter").onchange = (e) => { ownerRegBy = e.target.value; render(); });
+    $("#ownerDiag") && ($("#ownerDiag").onclick = diagnoseOwner);
     const oSearch = $("#ownerSearch");
     if (oSearch) {
       oSearch.oninput = (e) => { ownerSearch = e.target.value; render(); };
