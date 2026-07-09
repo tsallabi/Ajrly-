@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=95";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=96";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=95";
-import "./modules/ownerContent.js?v=95";
-import "./modules/assets.js?v=95";
-import "./modules/account.js?v=95";
-import "./modules/team.js?v=95";
-import "./modules/performance.js?v=95";
+import "./modules/finance.js?v=96";
+import "./modules/ownerContent.js?v=96";
+import "./modules/assets.js?v=96";
+import "./modules/account.js?v=96";
+import "./modules/team.js?v=96";
+import "./modules/performance.js?v=96";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=95";
-import AjrlyPresence from "./presence.js?v=95"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=96";
+import AjrlyPresence from "./presence.js?v=96"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -1599,6 +1599,38 @@ window.AjrlyOS = {
 /* Boot — wrapped so a failure shows an error instead of a black screen.
    Detect the cloud backend first; if live, restore the session and hydrate
    shared data, then render. Always falls back to local mode on any failure. */
+/* ---------------- Auto-update (keep every device on the latest build) ----------------
+   The running build stamps its version below (bumped with each deploy alongside
+   the ?v= in index.html). Periodically fetch index.html (which is served
+   no-cache) and read the app.js?v=NN of the LIVE deploy; if it's newer than what
+   this tab is running, reload to pick it up — so all devices update themselves
+   without a manual hard-refresh. Never reloads mid-edit (while a modal is open). */
+const APP_VERSION = 96;
+let _updating = false;
+async function checkForUpdate() {
+  if (_updating) return;
+  try {
+    const res = await fetch("/index.html?_=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return;
+    const html = await res.text();
+    const m = html.match(/app\.js\?v=(\d+)/);
+    if (!m) return;
+    const latest = parseInt(m[1], 10);
+    if (!(latest > APP_VERSION)) return;
+    const host = document.getElementById("modalHost");
+    if (host && !host.hidden) return; // don't interrupt an open form — catch it next tick
+    _updating = true;
+    try { toast(getLang() === "ar" ? "يتوفّر تحديث — جارٍ التحديث…" : "Updating to the latest version…"); } catch (_) {}
+    setTimeout(() => { try { location.reload(); } catch (_) { location.href = location.pathname; } }, 1200);
+  } catch (_) { /* offline / transient — try again next tick */ }
+}
+function startAutoUpdate() {
+  setTimeout(checkForUpdate, 8000);              // shortly after load
+  setInterval(checkForUpdate, 5 * 60 * 1000);    // every 5 minutes
+  window.addEventListener("focus", checkForUpdate);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); });
+}
+
 window.addEventListener("hashchange", render);
 async function boot() {
   initChrome();
@@ -1622,6 +1654,7 @@ async function boot() {
   bootDone = true;   // enable recurring-task rolling now that data is loaded
   try { healStuckTimers(); } catch (_) {}   // stop any finished task still ticking
   try { markActive(); } catch (_) {}
+  try { startAutoUpdate(); } catch (_) {}   // keep this device on the latest deploy
   render();
 }
 try {
