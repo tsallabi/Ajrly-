@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=98";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=99";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=98";
-import "./modules/ownerContent.js?v=98";
-import "./modules/assets.js?v=98";
-import "./modules/account.js?v=98";
-import "./modules/team.js?v=98";
-import "./modules/performance.js?v=98";
+import "./modules/finance.js?v=99";
+import "./modules/ownerContent.js?v=99";
+import "./modules/assets.js?v=99";
+import "./modules/account.js?v=99";
+import "./modules/team.js?v=99";
+import "./modules/performance.js?v=99";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=98";
-import AjrlyPresence from "./presence.js?v=98"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=99";
+import AjrlyPresence from "./presence.js?v=99"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -1613,11 +1613,19 @@ window.AjrlyOS = {
    no-cache) and read the app.js?v=NN of the LIVE deploy; if it's newer than what
    this tab is running, reload to pick it up — so all devices update themselves
    without a manual hard-refresh. Never reloads mid-edit (while a modal is open). */
-const APP_VERSION = 98;
+const APP_VERSION = 99;
 let _updating = false;
 async function checkForUpdate() {
   if (_updating) return;
   try {
+    // NEVER interrupt sign-in, an open form, or active typing — those must be
+    // stable. (A reload here was blocking the login screen.)
+    if (document.body.classList.contains("authing")) return;
+    const host = document.getElementById("modalHost");
+    if (host && !host.hidden) return;
+    const ae = document.activeElement;
+    if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || "")) return;
+
     const res = await fetch("/index.html?_=" + Date.now(), { cache: "no-store" });
     if (!res.ok) return;
     const html = await res.text();
@@ -1625,8 +1633,9 @@ async function checkForUpdate() {
     if (!m) return;
     const latest = parseInt(m[1], 10);
     if (!(latest > APP_VERSION)) return;
-    const host = document.getElementById("modalHost");
-    if (host && !host.hidden) return; // don't interrupt an open form — catch it next tick
+    // loop guard: only ever attempt to reach a given target version once per tab
+    // session, so a caching quirk can never cause a reload loop.
+    try { if (sessionStorage.getItem("ajrly_upd_target") === String(latest)) return; sessionStorage.setItem("ajrly_upd_target", String(latest)); } catch (_) {}
     _updating = true;
     try { toast(getLang() === "ar" ? "يتوفّر تحديث — جارٍ التحديث…" : "Updating to the latest version…"); } catch (_) {}
     setTimeout(() => { try { location.reload(); } catch (_) { location.href = location.pathname; } }, 1200);
