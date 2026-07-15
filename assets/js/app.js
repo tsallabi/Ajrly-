@@ -1,22 +1,22 @@
 /* ============================================================
    Ajrly OS — Application core (router + views)
    ============================================================ */
-import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=97";
+import { db, PILLARS, CORE_VALUES, GOALS, TEAM, OWNER_STAGES, LINKS } from "./data.js?v=98";
 import { t, getLang, setLang, registerStrings } from "./i18n.js";
 import { moduleRoutes } from "./registry.js";
 import { currentUser, hasUsers, login, register, logout, can, teamNames } from "./auth.js";
 /* Feature modules (self-register via registry). Order = nav order. */
 /* Feature modules are imported only here, so a ?v= stamp busts their cache on
    each deploy without breaking shared-module identity. Bump alongside index.html. */
-import "./modules/finance.js?v=97";
-import "./modules/ownerContent.js?v=97";
-import "./modules/assets.js?v=97";
-import "./modules/account.js?v=97";
-import "./modules/team.js?v=97";
-import "./modules/performance.js?v=97";
+import "./modules/finance.js?v=98";
+import "./modules/ownerContent.js?v=98";
+import "./modules/assets.js?v=98";
+import "./modules/account.js?v=98";
+import "./modules/team.js?v=98";
+import "./modules/performance.js?v=98";
 import cloud from "./cloud.js";
-import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=97";
-import AjrlyPresence from "./presence.js?v=97"; // also sets window.AjrlyPresence
+import { hydrateFromCloud, wireWriteThrough } from "./dataCloud.js?v=98";
+import AjrlyPresence from "./presence.js?v=98"; // also sets window.AjrlyPresence
 
 /* ---------------- Helpers ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -573,13 +573,13 @@ function startTimerTicker() {
 function filterTasks() {
   let list = db.tasks;
   if (taskMember) {
-    // trim + case-insensitive so minor name-format differences (stray spaces,
-    // casing) between a task's assigned-by/-to and the dropdown value can't make
-    // the filter silently miss. Matches whether the person assigned it or it's
-    // assigned to them, so the filter behaves the same across every tab.
+    // Show only tasks ASSIGNED TO this person — i.e. the one responsible for
+    // doing it: the delegate, or the assigner when there's no separate delegate
+    // (same "who" used in the table's owner column). Trim + case-insensitive so
+    // minor name-format differences can't make it miss. Applies to every tab.
     const tm = String(taskMember).trim().toLowerCase();
     const norm = (s) => String(s || "").trim().toLowerCase();
-    list = list.filter(x => norm(x.assignedBy) === tm || norm(x.delegateTo) === tm);
+    list = list.filter(x => norm(x.delegateTo || x.assignedBy) === tm);
   }
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
@@ -1613,7 +1613,7 @@ window.AjrlyOS = {
    no-cache) and read the app.js?v=NN of the LIVE deploy; if it's newer than what
    this tab is running, reload to pick it up — so all devices update themselves
    without a manual hard-refresh. Never reloads mid-edit (while a modal is open). */
-const APP_VERSION = 97;
+const APP_VERSION = 98;
 let _updating = false;
 async function checkForUpdate() {
   if (_updating) return;
