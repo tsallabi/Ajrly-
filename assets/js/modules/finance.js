@@ -531,19 +531,36 @@ const costUsd = (c) => { const r = num(c.rate); return r ? num(c.estimatedCost) 
 const budEstUsd = (b) => budCosts(b).reduce((s, c) => s + costUsd(c), 0);
 /* Actual spending = the budget's manual "actual" PLUS every expense whose
    category exactly matches the budget name. Same-currency amounts add
-   directly; for a USD budget, other-currency expenses convert via their rate. */
+   directly; different-currency expenses convert into the budget's currency
+   via USD (using the rate stored on the expense and a rate for the budget's
+   currency derived from the budget's own cost lines / other records). */
+const num0 = (v) => { const n = num(v); return n > 0 ? n : 0; };
+/* "1 USD = ? <cur>" — found from data that already carries an exchange rate:
+   this budget's cost lines first, then any expense record, then any budget. */
+function curUsdRate(cur, b) {
+  cur = cur || "LYD";
+  if (cur === "USD") return 1;
+  if (b) for (const c of budCosts(b)) { if ((c.currency || b.currency || "LYD") === cur) { const rt = num0(c.rate); if (rt) return rt; } }
+  for (const r of records()) { if ((r.currency || "LYD") === cur) { const rt = num0(r.rate); if (rt) return rt; } }
+  for (const bb of budgets()) for (const c of budCosts(bb)) { if ((c.currency || bb.currency || "LYD") === cur) { const rt = num0(c.rate); if (rt) return rt; } }
+  return 0;
+}
 function budActualSpent(b) {
   const bCur = b.currency || "LYD";
   let total = num(b.actual);
   const name = String(b.name || "").trim().toLowerCase();
-  if (name) {
-    records().forEach(r => {
-      if ((r.kind || "expense") !== "expense") return;
-      if (String(r.category || "").trim().toLowerCase() !== name) return;
-      if ((r.currency || "LYD") === bCur) total += num(r.amount);
-      else if (bCur === "USD") total += usdOf(r);
-    });
-  }
+  if (!name) return total;
+  const bRate = curUsdRate(bCur, b); // 1 USD = bRate <bCur>
+  records().forEach(r => {
+    if ((r.kind || "expense") !== "expense") return;
+    if (String(r.category || "").trim().toLowerCase() !== name) return;
+    const rCur = r.currency || "LYD";
+    if (rCur === bCur) { total += num(r.amount); return; } // same currency
+    const usd = usdOf(r);                                  // needs a rate on the expense
+    if (!usd) return;
+    if (bCur === "USD") { total += usd; return; }
+    if (bRate) total += usd * bRate;                       // convert USD -> budget currency
+  });
   return total;
 }
 
